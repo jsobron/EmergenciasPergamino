@@ -1,0 +1,53 @@
+{
+  "datos_simulados": true,
+  "ambulancias": [
+    {
+      "id": "A1",
+      "base_id": "GUARDIA-2",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    },
+    {
+      "id": "A2",
+      "base_id": "GUARDIA-3",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    },
+    {
+      "id": "A3",
+      "base_id": "GUARDIA-4",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    },
+    {
+      "id": "A4",
+      "base_id": "GUARDIA-1",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    },
+    {
+      "id": "A5",
+      "base_id": "GUARDIA-5",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    },
+    {
+      "id": "A6",
+      "base_id": "SAME",
+      "disponible": true,
+      "complejidad": 2,
+      "capacidad_pacientes": 1,
+      "equipamiento": []
+    }
+  ]
+}

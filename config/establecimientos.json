@@ -1,0 +1,41 @@
+{
+  "datos_simulados": true,
+  "establecimientos": [
+    {
+      "id": "GUARDIA-1",
+      "base_id": "GUARDIA-1",
+      "habilitado_destino": true,
+      "prioridad": 1,
+      "penalizacion_metros": 0,
+      "complejidad_maxima": 3,
+      "especialidades": []
+    },
+    {
+      "id": "GUARDIA-2",
+      "base_id": "GUARDIA-2",
+      "habilitado_destino": true,
+      "prioridad": 2,
+      "penalizacion_metros": 1000,
+      "complejidad_maxima": 2,
+      "especialidades": []
+    },
+    {
+      "id": "GUARDIA-3",
+      "base_id": "GUARDIA-3",
+      "habilitado_destino": true,
+      "prioridad": 2,
+      "penalizacion_metros": 1000,
+      "complejidad_maxima": 2,
+      "especialidades": []
+    },
+    {
+      "id": "GUARDIA-4",
+      "base_id": "GUARDIA-4",
+      "habilitado_destino": true,
+      "prioridad": 2,
+      "penalizacion_metros": 1000,
+      "complejidad_maxima": 2,
+      "especialidades": []
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "emergencias": [
+    {
+      "id": "E1",
+      "latitud": -33.87827904,
+      "longitud": -60.593397,
+      "gravedad": 3,
+      "complejidad_requerida": 2,
+      "cantidad_pacientes": 1,
+      "equipamiento_requerido": [],
+      "minutos_espera": 8,
+      "estado": "pendiente",
+      "datos_simulados": true
+    },
+    {
+      "id": "E2",
+      "latitud": -33.87838615,
+      "longitud": -60.54819089,
+      "gravedad": 3,
+      "complejidad_requerida": 2,
+      "cantidad_pacientes": 1,
+      "equipamiento_requerido": [],
+      "minutos_espera": 15,
+      "estado": "pendiente",
+      "datos_simulados": true
+    },
+    {
+      "id": "E3",
+      "latitud": -33.89496831,
+      "longitud": -60.56968397,
+      "gravedad": 2,
+      "complejidad_requerida": 2,
+      "cantidad_pacientes": 1,
+      "equipamiento_requerido": [],
+      "minutos_espera": 20,
+      "estado": "pendiente",
+      "datos_simulados": true
+    },
+    {
+      "id": "E4",
+      "latitud": -33.91813071,
+      "longitud": -60.59586056,
+      "gravedad": 2,
+      "complejidad_requerida": 1,
+      "cantidad_pacientes": 1,
+      "equipamiento_requerido": [],
+      "minutos_espera": 10,
+      "estado": "pendiente",
+      "datos_simulados": true
+    },
+    {
+      "id": "E5",
+      "latitud": -33.91200968,
+      "longitud": -60.54996539,
+      "gravedad": 1,
+      "complejidad_requerida": 1,
+      "cantidad_pacientes": 1,
+      "equipamiento_requerido": [],
+      "minutos_espera": 25,
+      "estado": "pendiente",
+      "datos_simulados": true
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Configuración local
+.env
+.vscode/
+.idea/
+
+# Archivos temporales
+*.log
+*.tmp
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
+
+# Mapa generado
+data/mapa_pergamino.html
