@@ -9,9 +9,11 @@ from typing import Any
 
 from .ambulancias import cargar_ambulancias
 from .alternativas import construir_alternativas
+from .asignacion import comparar_niveles
 from .establecimientos import cargar_establecimientos
 from .emergencias import cargar_emergencias
 from .grafo import Grafo
+from .heuristicas import reducir_alternativas
 
 
 def preparar_datos_mapa(
@@ -27,6 +29,12 @@ def preparar_datos_mapa(
     emergencias = cargar_emergencias(configuracion_emergencias, grafo)
     resultado_alternativas = construir_alternativas(
         ambulancias, emergencias, establecimientos, grafo
+    )
+    reduccion = reducir_alternativas(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
+    )
+    comparacion_asignaciones = comparar_niveles(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
     )
 
     tramos: list[dict[str, Any]] = []
@@ -71,6 +79,37 @@ def preparar_datos_mapa(
         "alternativas": [
             asdict(alternativa) for alternativa in resultado_alternativas.alternativas
         ],
+        "reduccion": {
+            "parametros": asdict(reduccion.parametros),
+            "estadisticas": asdict(reduccion.estadisticas),
+            "orden_emergencias": [
+                asdict(item) for item in reduccion.orden_emergencias
+            ],
+            "selecciones": {
+                emergencia_id: asdict(seleccion)
+                for emergencia_id, seleccion in reduccion.selecciones.items()
+            },
+            "alternativas_reducidas": [
+                asdict(alternativa)
+                for alternativa in reduccion.alternativas_reducidas
+            ],
+        },
+        "asignaciones": {
+            "original": asdict(comparacion_asignaciones.original),
+            **{
+                f"nivel-{resultado_nivel.parametros.nivel}": asdict(resultado_nivel)
+                for resultado_nivel in comparacion_asignaciones.niveles
+                if resultado_nivel.parametros is not None
+            },
+        },
+        "comparacion_asignaciones": {
+            "nivel_recomendado": comparacion_asignaciones.nivel_recomendado,
+            "perdida_por_heuristica": (
+                comparacion_asignaciones.perdida_por_heuristica
+            ),
+            "niveles_con_perdida": comparacion_asignaciones.niveles_con_perdida,
+            "diferencias": comparacion_asignaciones.diferencias,
+        },
         "rutas_ambulancia_emergencia": {
             clave: {
                 "distancia_metros": ruta.distancia_m,
@@ -143,7 +182,7 @@ def _plantilla_html(datos_json: str) -> str:
     html, body {{ height: 100%; margin: 0; }}
     body {{
       display: grid;
-      grid-template-rows: auto auto 1fr;
+      grid-template-rows: auto auto auto auto 1fr;
       min-height: 100%;
       background: var(--surface-muted);
       color: var(--text);
@@ -217,6 +256,51 @@ def _plantilla_html(datos_json: str) -> str:
     #resultado-alternativa div {{ display: flex; gap: 0.25rem; }}
     #resultado-alternativa dt {{ font-weight: 700; }}
     #resultado-alternativa dd {{ margin: 0; }}
+    .heuristic-controls {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(10rem, 1fr));
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      z-index: 850;
+    }}
+    .heuristic-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-heuristica {{
+      grid-column: 1 / -1;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 4px solid var(--route-second);
+      background: #eaf7f1;
+    }}
+    .assignment-controls {{
+      display: grid;
+      grid-template-columns: minmax(12rem, 18rem) 1fr;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      z-index: 825;
+    }}
+    .assignment-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-asignacion {{
+      grid-column: 1 / -1;
+      max-height: 14rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 4px solid var(--route);
+      background: #eef4fb;
+    }}
+    #resultado-asignacion dl {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem;
+      margin: 0 0 0.5rem;
+    }}
+    #resultado-asignacion div {{ display: flex; gap: 0.25rem; }}
+    #resultado-asignacion dt {{ font-weight: 700; }}
+    #resultado-asignacion dd {{ margin: 0; }}
     #mapa {{ width: 100%; min-height: 28rem; }}
     .base-icon {{
       display: grid;
@@ -285,12 +369,22 @@ def _plantilla_html(datos_json: str) -> str:
     .leyenda-linea {{ width: 1.5rem; height: 0; border-top: 4px solid; }}
     .leyenda-linea.tramo-inicial {{ border-color: var(--route-first); }}
     .leyenda-linea.tramo-destino {{ border-color: var(--route-second); }}
+    .leyenda-muestra.ambulancia-conservada {{ background: var(--route-first); }}
+    .leyenda-muestra.ambulancia-descartada {{ background: #8a8f8c; opacity: 0.45; }}
+    .leyenda-muestra.establecimiento-conservado {{ background: var(--destino); }}
+    .leyenda-muestra.establecimiento-excluido {{ background: #8a8f8c; opacity: 0.45; }}
+    .leyenda-muestra.asignacion-atendida {{ background: var(--route-second); }}
+    .leyenda-muestra.asignacion-sin-asignar {{ background: #8a8f8c; opacity: 0.45; }}
     @media (max-width: 760px) {{
       header {{ grid-template-columns: 1fr; align-items: stretch; }}
       .controls {{ grid-template-columns: 1fr 1fr; }}
       #resultado {{ grid-column: 1 / -1; }}
       .alternative-controls {{ grid-template-columns: 1fr; }}
       .alternative-controls h2, #resultado-alternativa {{ grid-column: auto; }}
+      .heuristic-controls {{ grid-template-columns: 1fr; }}
+      .heuristic-controls h2, #resultado-heuristica {{ grid-column: auto; }}
+      .assignment-controls {{ grid-template-columns: 1fr; }}
+      .assignment-controls h2, #resultado-asignacion {{ grid-column: auto; }}
     }}
     @media (max-width: 480px) {{
       .controls {{ grid-template-columns: 1fr; }}
@@ -322,6 +416,17 @@ def _plantilla_html(datos_json: str) -> str:
     <div class="field"><label for="alternativa-emergencia">Emergencia</label><select id="alternativa-emergencia"></select></div>
     <div class="field"><label for="alternativa-establecimiento">Establecimiento</label><select id="alternativa-establecimiento"></select></div>
     <div id="resultado-alternativa" role="status" aria-live="polite">Elegí los tres elementos para inspeccionar una alternativa.</div>
+  </section>
+  <section class="heuristic-controls" aria-labelledby="titulo-heuristicas">
+    <h2 id="titulo-heuristicas">Reducción de candidatos — Etapa 6</h2>
+    <div class="field"><label for="heuristica-emergencia">Emergencia</label><select id="heuristica-emergencia"></select></div>
+    <div class="field"><label for="heuristica-alternativa">Alternativa reducida</label><select id="heuristica-alternativa"></select></div>
+    <div id="resultado-heuristica" role="status" aria-live="polite">Elegí una emergencia para ver los candidatos conservados.</div>
+  </section>
+  <section class="assignment-controls" aria-labelledby="titulo-asignacion">
+    <h2 id="titulo-asignacion">Asignación global — Etapa 7</h2>
+    <div class="field"><label for="asignacion-conjunto">Conjunto de alternativas</label><select id="asignacion-conjunto"></select></div>
+    <div id="resultado-asignacion" role="status" aria-live="polite">Elegí un conjunto para ver la asignación global.</div>
   </section>
   <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
 
@@ -355,6 +460,11 @@ def _plantilla_html(datos_json: str) -> str:
     const establecimientosPorBase = Object.fromEntries(
       datos.establecimientos.map((establecimiento) => [establecimiento.base_id, establecimiento])
     );
+    const establecimientosPorId = Object.fromEntries(
+      datos.establecimientos.map((establecimiento) => [establecimiento.id, establecimiento])
+    );
+    const marcadoresBase = {{}};
+    const marcadoresEmergencia = {{}};
 
     datos.bases.forEach((base) => {{
       const ambulancia = ambulanciasPorBase[base.id];
@@ -384,9 +494,9 @@ def _plantilla_html(datos_json: str) -> str:
           <li><strong>Recibe pacientes:</strong> ${{recibePacientes}}</li>
           ${{detallesDestino}}
         </ul>`;
-      L.marker([base.latitud, base.longitud], {{ icon: icono, title: base.nombre }})
-        .bindPopup(contenido)
-        .addTo(mapa);
+      marcadoresBase[base.id] = L.marker(
+        [base.latitud, base.longitud], {{ icon: icono, title: base.nombre }}
+      ).bindPopup(contenido).addTo(mapa);
     }});
 
     const descripcionGravedad = {{
@@ -417,10 +527,12 @@ def _plantilla_html(datos_json: str) -> str:
           <li><strong>Distancia al nodo:</strong> ${{emergencia.distancia_al_nodo_m.toLocaleString("es-AR")}} m</li>
           <li><strong>Datos simulados:</strong> ${{emergencia.datos_simulados ? "Sí" : "No"}}</li>
         </ul>`;
-      L.marker([emergencia.latitud, emergencia.longitud], {{
-        icon: icono,
-        title: `Emergencia ${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`
-      }}).bindPopup(contenido).addTo(mapa);
+      marcadoresEmergencia[emergencia.id] = L.marker(
+        [emergencia.latitud, emergencia.longitud], {{
+          icon: icono,
+          title: `Emergencia ${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`
+        }}
+      ).bindPopup(contenido).addTo(mapa);
     }});
 
     const leyenda = L.control({{ position: "bottomleft" }});
@@ -437,7 +549,17 @@ def _plantilla_html(datos_json: str) -> str:
         <span class="leyenda-item"><i class="leyenda-muestra emergencia gravedad-1"></i>Gravedad baja (1)</span>
         <strong>Alternativa manual</strong>
         <span class="leyenda-item"><i class="leyenda-linea tramo-inicial"></i>Tramo ambulancia → emergencia</span>
-        <span class="leyenda-item"><i class="leyenda-linea tramo-destino"></i>Tramo emergencia → establecimiento</span>`;
+        <span class="leyenda-item"><i class="leyenda-linea tramo-destino"></i>Tramo emergencia → establecimiento</span>
+        <strong>Reducción de candidatos</strong>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-conservada"></i>Ambulancia conservada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-descartada"></i>Ambulancia descartada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-conservado"></i>Establecimiento conservado</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-excluido"></i>Establecimiento excluido</span>
+        <strong>Asignación global</strong>
+        <span class="leyenda-item"><i class="leyenda-muestra asignacion-atendida"></i>Emergencia atendida</span>
+        <span class="leyenda-item"><i class="leyenda-muestra asignacion-sin-asignar"></i>Emergencia sin asignar</span>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-conservada"></i>Ambulancia utilizada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-conservado"></i>Establecimiento elegido</span>`;
       return contenedor;
     }};
     leyenda.addTo(mapa);
@@ -495,14 +617,37 @@ def _plantilla_html(datos_json: str) -> str:
     const alternativasPorClave = Object.fromEntries(datos.alternativas.map((a) => [
       `${{a.ambulancia_id}}|${{a.emergencia_id}}|${{a.establecimiento_id}}`, a
     ]));
-    let capaHastaEmergencia = null;
-    let capaHastaEstablecimiento = null;
     const mostrarMetros = (valor) => valor === null
       ? "Sin ruta"
       : `${{Math.round(valor).toLocaleString("es-AR")}} m`;
+    function crearDibujadorTramos() {{
+      let capaInicial = null;
+      let capaDestino = null;
+      function limpiar() {{
+        if (capaInicial) {{ mapa.removeLayer(capaInicial); capaInicial = null; }}
+        if (capaDestino) {{ mapa.removeLayer(capaDestino); capaDestino = null; }}
+      }}
+      function dibujar(ambulanciaId, emergenciaId, establecimientoId) {{
+        limpiar();
+        const rutaInicial = datos.rutas_ambulancia_emergencia[`${{ambulanciaId}}|${{emergenciaId}}`];
+        const rutaDestino = datos.rutas_emergencia_establecimiento[`${{emergenciaId}}|${{establecimientoId}}`];
+        const capas = [];
+        if (rutaInicial && rutaInicial.coordenadas.length) {{
+          capaInicial = L.polyline(rutaInicial.coordenadas, {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}).addTo(mapa);
+          capas.push(capaInicial);
+        }}
+        if (rutaDestino && rutaDestino.coordenadas.length) {{
+          capaDestino = L.polyline(rutaDestino.coordenadas, {{ color: "#00875a", weight: 5, opacity: 0.92 }}).addTo(mapa);
+          capas.push(capaDestino);
+        }}
+        if (capas.length) mapa.fitBounds(L.featureGroup(capas).getBounds(), {{ padding: [36, 36], maxZoom: 16 }});
+        return capas;
+      }}
+      return {{ limpiar, dibujar }};
+    }}
+    const dibujadorManual = crearDibujadorTramos();
     function dibujarAlternativa() {{
-      if (capaHastaEmergencia) {{ mapa.removeLayer(capaHastaEmergencia); capaHastaEmergencia = null; }}
-      if (capaHastaEstablecimiento) {{ mapa.removeLayer(capaHastaEstablecimiento); capaHastaEstablecimiento = null; }}
+      dibujadorManual.limpiar();
       const ambulanciaId = selectorAmbulancia.value;
       const emergenciaId = selectorEmergencia.value;
       const establecimientoId = selectorEstablecimiento.value;
@@ -511,18 +656,7 @@ def _plantilla_html(datos_json: str) -> str:
         return;
       }}
       const alternativa = alternativasPorClave[`${{ambulanciaId}}|${{emergenciaId}}|${{establecimientoId}}`];
-      const rutaInicial = datos.rutas_ambulancia_emergencia[`${{ambulanciaId}}|${{emergenciaId}}`];
-      const rutaDestino = datos.rutas_emergencia_establecimiento[`${{emergenciaId}}|${{establecimientoId}}`];
-      const capas = [];
-      if (rutaInicial.coordenadas.length) {{
-        capaHastaEmergencia = L.polyline(rutaInicial.coordenadas, {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}).addTo(mapa);
-        capas.push(capaHastaEmergencia);
-      }}
-      if (rutaDestino.coordenadas.length) {{
-        capaHastaEstablecimiento = L.polyline(rutaDestino.coordenadas, {{ color: "#00875a", weight: 5, opacity: 0.92 }}).addTo(mapa);
-        capas.push(capaHastaEstablecimiento);
-      }}
-      if (capas.length) mapa.fitBounds(L.featureGroup(capas).getBounds(), {{ padding: [36, 36], maxZoom: 16 }});
+      dibujadorManual.dibujar(ambulanciaId, emergenciaId, establecimientoId);
       const motivos = alternativa.motivos_descarte.length
         ? alternativa.motivos_descarte.map(escapar).join(", ")
         : "Ninguno";
@@ -539,6 +673,257 @@ def _plantilla_html(datos_json: str) -> str:
     selectorAmbulancia.addEventListener("change", dibujarAlternativa);
     selectorEmergencia.addEventListener("change", dibujarAlternativa);
     selectorEstablecimiento.addEventListener("change", dibujarAlternativa);
+
+    const selectorEmergenciaHeuristica = document.getElementById("heuristica-emergencia");
+    const selectorAlternativaHeuristica = document.getElementById("heuristica-alternativa");
+    const resultadoHeuristica = document.getElementById("resultado-heuristica");
+    const capaCandidatosEstablecimientos = L.layerGroup().addTo(mapa);
+    const dibujadorHeuristico = crearDibujadorTramos();
+    const alternativasReducidasPorEmergencia = {{}};
+    datos.reduccion.alternativas_reducidas.forEach((alternativa) => {{
+      if (!alternativasReducidasPorEmergencia[alternativa.emergencia_id]) {{
+        alternativasReducidasPorEmergencia[alternativa.emergencia_id] = [];
+      }}
+      alternativasReducidasPorEmergencia[alternativa.emergencia_id].push(alternativa);
+    }});
+    const opcionEmergenciaHeuristica = new Option("Seleccionar emergencia…", "", true, true);
+    opcionEmergenciaHeuristica.disabled = true;
+    selectorEmergenciaHeuristica.add(opcionEmergenciaHeuristica);
+    datos.emergencias.forEach((emergencia) => {{
+      selectorEmergenciaHeuristica.add(new Option(
+        `${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`, emergencia.id
+      ));
+    }});
+    function reiniciarAlternativasHeuristicas() {{
+      selectorAlternativaHeuristica.innerHTML = "";
+      const inicial = new Option("Seleccionar alternativa…", "", true, true);
+      inicial.disabled = true;
+      selectorAlternativaHeuristica.add(inicial);
+    }}
+    function limpiarCapasHeuristicas() {{
+      dibujadorHeuristico.limpiar();
+      capaCandidatosEstablecimientos.clearLayers();
+    }}
+    function limpiarHeuristica() {{
+      limpiarCapasHeuristicas();
+      limpiarAsignacion();
+      reiniciarAsignacionUI();
+      Object.values(marcadoresBase).forEach((marcador) => marcador.setOpacity(1));
+      Object.values(marcadoresEmergencia).forEach((marcador) => {{
+        marcador.setOpacity(1);
+        marcador.setZIndexOffset(0);
+      }});
+      reiniciarAlternativasHeuristicas();
+    }}
+    function dibujarAlternativaHeuristica() {{
+      const clave = selectorAlternativaHeuristica.value;
+      if (!clave) {{
+        dibujadorHeuristico.limpiar();
+        return;
+      }}
+      const [ambulanciaId, emergenciaId, establecimientoId] = clave.split("|");
+      dibujadorHeuristico.dibujar(ambulanciaId, emergenciaId, establecimientoId);
+    }}
+    function aplicarHeuristica() {{
+      limpiarHeuristica();
+      const emergenciaId = selectorEmergenciaHeuristica.value;
+      if (!emergenciaId) {{
+        resultadoHeuristica.textContent = "Elegí una emergencia para ver los candidatos conservados.";
+        return;
+      }}
+      const seleccion = datos.reduccion.selecciones[emergenciaId];
+      const conservadas = new Set(
+        seleccion.ambulancias.filter((candidato) => candidato.conservada)
+          .map((candidato) => candidato.ambulancia_id)
+      );
+      datos.ambulancias.forEach((ambulancia) => {{
+        const marcador = marcadoresBase[ambulancia.base_id];
+        if (marcador) marcador.setOpacity(conservadas.has(ambulancia.id) ? 1 : 0.28);
+      }});
+      const marcadorEmergencia = marcadoresEmergencia[emergenciaId];
+      if (marcadorEmergencia) marcadorEmergencia.setZIndexOffset(1000);
+      seleccion.establecimientos.forEach((candidato) => {{
+        const establecimiento = establecimientosPorId[candidato.establecimiento_id];
+        if (!establecimiento) return;
+        L.circleMarker([establecimiento.latitud, establecimiento.longitud], {{
+          radius: candidato.conservado ? 19 : 12,
+          color: candidato.conservado ? "#075c9e" : "#7f8783",
+          weight: candidato.conservado ? 4 : 2,
+          opacity: candidato.conservado ? 0.95 : 0.4,
+          fillColor: candidato.conservado ? "#075c9e" : "#7f8783",
+          fillOpacity: candidato.conservado ? 0.16 : 0.04,
+          interactive: false
+        }}).addTo(capaCandidatosEstablecimientos);
+      }});
+      const alternativas = alternativasReducidasPorEmergencia[emergenciaId] || [];
+      alternativas.forEach((alternativa) => {{
+        const clave = `${{alternativa.ambulancia_id}}|${{alternativa.emergencia_id}}|${{alternativa.establecimiento_id}}`;
+        const etiqueta = `${{alternativa.ambulancia_id}} → ${{alternativa.establecimiento_id}} (${{mostrarMetros(alternativa.costo_seleccion)}})`;
+        selectorAlternativaHeuristica.add(new Option(etiqueta, clave));
+      }});
+      const factiblesAntes = datos.alternativas.filter(
+        (alternativa) => alternativa.emergencia_id === emergenciaId && alternativa.es_factible
+      ).length;
+      const conservadasCantidad = seleccion.ambulancias.filter((candidato) => candidato.conservada).length;
+      const conservadosCantidad = seleccion.establecimientos.filter((candidato) => candidato.conservado).length;
+      resultadoHeuristica.textContent =
+        `${{emergenciaId}} — ambulancias: ${{seleccion.ambulancias.length}} → ${{conservadasCantidad}}; ` +
+        `establecimientos: ${{seleccion.establecimientos.length}} → ${{conservadosCantidad}}; ` +
+        `alternativas factibles: ${{factiblesAntes}} → ${{alternativas.length}}`;
+      if (alternativas.length) {{
+        selectorAlternativaHeuristica.selectedIndex = 1;
+        dibujarAlternativaHeuristica();
+      }} else {{
+        resultadoHeuristica.textContent += " — sin alternativas reducidas";
+      }}
+    }}
+    selectorEmergenciaHeuristica.addEventListener("change", aplicarHeuristica);
+    selectorAlternativaHeuristica.addEventListener("change", dibujarAlternativaHeuristica);
+    reiniciarAlternativasHeuristicas();
+
+    const selectorAsignacion = document.getElementById("asignacion-conjunto");
+    const resultadoAsignacion = document.getElementById("resultado-asignacion");
+    const capaAsignacionRutas = L.layerGroup().addTo(mapa);
+    const capaAsignacionEstablecimientos = L.layerGroup().addTo(mapa);
+    const opcionAsignacion = new Option("Seleccionar conjunto…", "", true, true);
+    opcionAsignacion.disabled = true;
+    selectorAsignacion.add(opcionAsignacion);
+    selectorAsignacion.add(new Option("Alternativas originales", "original"));
+    const nivelRecomendado = datos.comparacion_asignaciones.nivel_recomendado;
+    [1, 2, 3, 4].forEach((nivel) => {{
+      const etiqueta = nivel === nivelRecomendado
+        ? `Nivel ${{nivel}} (recomendado)`
+        : `Nivel ${{nivel}}`;
+      selectorAsignacion.add(new Option(etiqueta, `nivel-${{nivel}}`));
+    }});
+
+    function limpiarCapasAsignacion() {{
+      capaAsignacionRutas.clearLayers();
+      capaAsignacionEstablecimientos.clearLayers();
+    }}
+
+    function limpiarAsignacion() {{
+      limpiarCapasAsignacion();
+      Object.values(marcadoresBase).forEach((marcador) => marcador.setOpacity(1));
+      Object.values(marcadoresEmergencia).forEach((marcador) => {{
+        marcador.setOpacity(1);
+        marcador.setZIndexOffset(0);
+      }});
+    }}
+
+    function reiniciarAsignacionUI() {{
+      selectorAsignacion.selectedIndex = 0;
+      resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+    }}
+
+    function aplicarAsignacion() {{
+      limpiarAsignacion();
+      limpiarCapasHeuristicas();
+      selectorEmergenciaHeuristica.selectedIndex = 0;
+      reiniciarAlternativasHeuristicas();
+      resultadoHeuristica.textContent = "Elegí una emergencia para ver los candidatos conservados.";
+      const clave = selectorAsignacion.value;
+      if (!clave) {{
+        resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+        return;
+      }}
+      const asignacion = datos.asignaciones[clave];
+      if (!asignacion) {{
+        resultadoAsignacion.textContent = "El conjunto seleccionado no tiene datos.";
+        return;
+      }}
+
+      const usadas = new Set(asignacion.ambulancias_utilizadas);
+      datos.ambulancias.forEach((ambulancia) => {{
+        const marcador = marcadoresBase[ambulancia.base_id];
+        if (marcador) marcador.setOpacity(usadas.has(ambulancia.id) ? 1 : 0.25);
+      }});
+      const atendidas = new Set(asignacion.emergencias_atendidas);
+      datos.emergencias.forEach((emergencia) => {{
+        const marcador = marcadoresEmergencia[emergencia.id];
+        if (!marcador) return;
+        marcador.setOpacity(atendidas.has(emergencia.id) ? 1 : 0.35);
+        if (atendidas.has(emergencia.id)) marcador.setZIndexOffset(1000);
+      }});
+
+      const elegidos = new Set(asignacion.establecimientos_seleccionados);
+      datos.establecimientos.forEach((establecimiento) => {{
+        const elegido = elegidos.has(establecimiento.id);
+        L.circleMarker([establecimiento.latitud, establecimiento.longitud], {{
+          radius: elegido ? 20 : 12,
+          color: elegido ? "#075c9e" : "#7f8783",
+          weight: elegido ? 4 : 2,
+          opacity: elegido ? 0.95 : 0.35,
+          fillColor: elegido ? "#075c9e" : "#7f8783",
+          fillOpacity: elegido ? 0.18 : 0.03,
+          interactive: false
+        }}).addTo(capaAsignacionEstablecimientos);
+      }});
+
+      const capas = [];
+      asignacion.alternativas.forEach((alternativa) => {{
+        const rutaInicial = datos.rutas_ambulancia_emergencia[
+          `${{alternativa.ambulancia_id}}|${{alternativa.emergencia_id}}`
+        ];
+        const rutaDestino = datos.rutas_emergencia_establecimiento[
+          `${{alternativa.emergencia_id}}|${{alternativa.establecimiento_id}}`
+        ];
+        if (rutaInicial && rutaInicial.coordenadas.length) {{
+          capas.push(L.polyline(rutaInicial.coordenadas, {{
+            color: "#7b2cbf", weight: 5, opacity: 0.92
+          }}).bindTooltip(
+            `${{alternativa.ambulancia_id}} → ${{alternativa.emergencia_id}}`
+          ).addTo(capaAsignacionRutas));
+        }}
+        if (rutaDestino && rutaDestino.coordenadas.length) {{
+          capas.push(L.polyline(rutaDestino.coordenadas, {{
+            color: "#00875a", weight: 5, opacity: 0.92
+          }}).bindTooltip(
+            `${{alternativa.emergencia_id}} → ${{alternativa.establecimiento_id}}`
+          ).addTo(capaAsignacionRutas));
+        }}
+      }});
+      if (capas.length) {{
+        mapa.fitBounds(L.featureGroup(capas).getBounds(), {{
+          padding: [36, 36], maxZoom: 16
+        }});
+      }}
+
+      const etiquetaConjunto = clave === "original"
+        ? "originales"
+        : `nivel ${{clave.replace("nivel-", "")}}`;
+      const detalle = asignacion.alternativas.map((alternativa) => (
+        `<li>${{escapar(alternativa.emergencia_id)}} → ` +
+        `${{escapar(alternativa.ambulancia_id)}} → ` +
+        `${{escapar(alternativa.establecimiento_id)}} ` +
+        `(${{mostrarMetros(alternativa.costo_seleccion)}})</li>`
+      )).join("") || "<li>Ninguna</li>";
+      const sinAsignar = asignacion.emergencias_sin_asignar.map(
+        (emergenciaId) => (
+          `<li>${{escapar(emergenciaId)}}: ` +
+          `${{escapar(asignacion.motivos_sin_asignar[emergenciaId])}}</li>`
+        )
+      ).join("") || "<li>Ninguna</li>";
+      const perdidaHeuristica = datos.comparacion_asignaciones
+        .perdida_por_heuristica
+        ? datos.comparacion_asignaciones.niveles_con_perdida.join(", ")
+        : "ninguno";
+      resultadoAsignacion.innerHTML = `<dl>
+        <div><dt>Conjunto:</dt><dd>${{etiquetaConjunto}}</dd></div>
+        <div><dt>Atendidas:</dt><dd>${{asignacion.emergencias_atendidas.length}} / ${{asignacion.orden_prioridad.length}}</dd></div>
+        <div><dt>Sin asignar:</dt><dd>${{asignacion.emergencias_sin_asignar.length}}</dd></div>
+        <div><dt>Costo total:</dt><dd>${{mostrarMetros(asignacion.costo_total)}}</dd></div>
+        <div><dt>Completa:</dt><dd>${{asignacion.es_completa ? "Sí" : "No"}}</dd></div>
+        <div><dt>Óptima dentro del conjunto:</dt><dd>${{asignacion.es_optima ? "Sí" : "No"}}</dd></div>
+        <div><dt>Nivel recomendado:</dt><dd>${{nivelRecomendado ?? "—"}}</dd></div>
+        <div><dt>Niveles con pérdida:</dt><dd>${{perdidaHeuristica}}</dd></div>
+      </dl>
+      <ul class="popup-list"><li><strong>Asignaciones</strong></li>${{detalle}}</ul>
+      <ul class="popup-list"><li><strong>Sin asignar</strong></li>${{sinAsignar}}</ul>`;
+    }}
+
+    selectorAsignacion.addEventListener("change", aplicarAsignacion);
+    aplicarAsignacion();
   </script>
 </body>
 </html>
