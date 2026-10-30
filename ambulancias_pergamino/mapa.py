@@ -278,66 +278,80 @@ def _plantilla_html(datos_json: str) -> str:
     :root {{
       color-scheme: light;
       --surface: #ffffff;
-      --surface-muted: #f4f7f6;
-      --text: #17211d;
-      --text-muted: #52615b;
-      --border: #cbd6d1;
-      --prioritario: #b42318;
-      --destino: #075c9e;
-      --solo-base: #5c6762;
-      --route: #006bd6;
-      --route-first: #7b2cbf;
-      --route-second: #00875a;
-      --gravedad-alta: #8b1e1e;
-      --gravedad-media: #c2410c;
-      --gravedad-baja: #d6a800;
+      --surface-muted: #eef3f8;
+      --text: #172033;
+      --text-muted: #607087;
+      --border: #d9e2ec;
+      --border-strong: #c5d2e0;
+      --primary: #1769aa;
+      --primary-dark: #124e7f;
+      --prioritario: #c2413b;
+      --destino: #1769aa;
+      --solo-base: #64748b;
+      --route: #1976d2;
+      --route-first: #7c3aed;
+      --route-second: #008a63;
+      --gravedad-alta: #b42318;
+      --gravedad-media: #d97706;
+      --gravedad-baja: #eab308;
+      --shadow: 0 0.4rem 1.4rem #1e3a5f14;
     }}
     * {{ box-sizing: border-box; }}
-    html, body {{ height: 100%; margin: 0; }}
+    html, body {{ min-height: 100%; margin: 0; }}
     body {{
-      display: grid;
-      grid-template-rows: auto auto auto auto auto auto 1fr;
-      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
       background: var(--surface-muted);
       color: var(--text);
-      font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }}
     header {{
       display: grid;
-      grid-template-columns: minmax(14rem, 1fr) minmax(28rem, 2fr);
+      grid-template-columns: minmax(14rem, 1fr) minmax(30rem, 2fr);
       align-items: end;
       gap: 1rem;
-      padding: 0.75rem 1rem;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      padding: 0.8rem 1.25rem;
+      background: #102a43;
+      border-bottom: 1px solid #0e426b;
+      color: #fff;
       z-index: 1000;
+      box-shadow: 0 0.25rem 0.8rem #102a4333;
     }}
-    h1 {{ margin: 0; font-size: 1.25rem; line-height: 1.2; }}
-    .subtitle {{ margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.875rem; }}
+    h1 {{ margin: 0; font-size: clamp(1.25rem, 2vw, 1.65rem); line-height: 1.2; letter-spacing: -0.02em; }}
+    .subtitle {{ margin: 0.4rem 0 0; color: #d9efff; font-size: 0.875rem; }}
     .badge {{
       display: inline-block;
       margin-left: 0.375rem;
-      padding: 0.125rem 0.375rem;
-      border: 1px solid #b36b50;
-      color: #793016;
+      padding: 0.2rem 0.5rem;
+      border: 1px solid #b7e2ff88;
+      border-radius: 999px;
+      background: #ffffff1c;
+      color: #fff;
       font-size: 0.75rem;
       font-weight: 700;
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }}
     .controls {{ display: grid; grid-template-columns: 1fr 1fr minmax(11rem, auto); gap: 0.75rem; }}
+    .controls, .field, section, .workspace, .control-panel {{ min-width: 0; }}
     .field {{ display: grid; gap: 0.25rem; }}
     label {{ font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }}
+    header label {{ color: #d9efff; }}
     select {{
       width: 100%;
       min-height: 2.5rem;
-      padding: 0.375rem 0.5rem;
+      padding: 0.45rem 0.65rem;
       border: 1px solid var(--border);
-      border-radius: 0.25rem;
+      border-radius: 0.5rem;
       background: var(--surface);
       color: var(--text);
       font: inherit;
+      box-shadow: 0 1px 2px #1e3a5f0d;
     }}
+    select:hover {{ border-color: #9eb4c9; }}
     select:focus-visible {{ outline: 3px solid #78b9ff; outline-offset: 1px; }}
     #resultado {{
       align-self: end;
@@ -345,26 +359,73 @@ def _plantilla_html(datos_json: str) -> str:
       display: flex;
       align-items: center;
       padding: 0.375rem 0.75rem;
-      border-left: 4px solid var(--route);
-      background: #eaf4ff;
+      border: 1px solid #b7e2ff88;
+      border-left: 4px solid #8bd1ff;
+      border-radius: 0.5rem;
+      background: #ffffff1c;
+      color: #fff;
       font-weight: 700;
     }}
+    section {{
+      flex: 0 0 auto;
+      margin: 0 0 1rem;
+      padding: 0.8rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }}
+    .workspace {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(22rem, 27rem);
+      grid-template-areas: "map controls";
+      gap: 0.9rem;
+      min-height: 0;
+      height: clamp(36rem, 72vh, 52rem);
+      flex: 0 0 auto;
+      padding: 0.9rem;
+    }}
+    .control-panel {{
+      grid-area: controls;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.2rem 0.25rem 0.2rem 0;
+    }}
+    .control-panel section:last-child {{ margin-bottom: 0; }}
     .alternative-controls {{
       display: grid;
       grid-template-columns: repeat(3, minmax(10rem, 1fr));
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 900;
+    }}
+    .control-panel .alternative-controls {{
+      grid-template-columns: minmax(0, 1fr);
+    }}
+    section h2 {{ color: var(--primary-dark); letter-spacing: -0.01em; }}
+    .control-panel section {{
+      margin-bottom: 0.75rem;
+      padding: 0.85rem;
+      border-radius: 0.6rem;
+      box-shadow: 0 0.2rem 0.7rem #1e3a5f12;
+    }}
+    .control-panel section h2 {{
+      margin: 0 0 0.75rem;
+      padding-bottom: 0.55rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.92rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }}
     .alternative-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
     #resultado-alternativa {{
       grid-column: 1 / -1;
+      min-width: 0;
       min-height: 2.5rem;
       padding: 0.5rem 0.75rem;
+      border: 1px solid #ddd0ff;
       border-left: 4px solid var(--route-first);
-      background: #f5effb;
+      border-radius: 0.5rem;
+      background: #faf8ff;
     }}
     #resultado-alternativa dl {{ display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0; }}
     #resultado-alternativa div {{ display: flex; gap: 0.25rem; }}
@@ -374,27 +435,29 @@ def _plantilla_html(datos_json: str) -> str:
       display: grid;
       grid-template-columns: repeat(2, minmax(10rem, 1fr));
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 850;
+    }}
+    .control-panel .heuristic-controls {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }}
     .heuristic-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
     #resultado-heuristica {{
       grid-column: 1 / -1;
       min-height: 2.5rem;
-      padding: 0.5rem 0.75rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid #c7eadc;
       border-left: 4px solid var(--route-second);
-      background: #eaf7f1;
+      border-radius: 0.5rem;
+      background: #f2fcf7;
     }}
     .assignment-controls {{
       display: grid;
       grid-template-columns: minmax(12rem, 18rem) 1fr;
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 825;
+    }}
+    .control-panel .assignment-controls {{
+      grid-template-columns: minmax(0, 1fr);
     }}
     .assignment-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
     #resultado-asignacion {{
@@ -403,8 +466,10 @@ def _plantilla_html(datos_json: str) -> str:
       overflow: auto;
       min-height: 2.5rem;
       padding: 0.5rem 0.75rem;
+      border: 1px solid #c7dced;
       border-left: 4px solid var(--route);
-      background: #eef4fb;
+      border-radius: 0.5rem;
+      background: #f7fbff;
     }}
     #resultado-asignacion dl {{
       display: flex;
@@ -419,10 +484,10 @@ def _plantilla_html(datos_json: str) -> str:
       display: grid;
       grid-template-columns: minmax(10rem, 14rem) minmax(12rem, 18rem) 1fr;
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 800;
+    }}
+    .control-panel .simulation-controls {{
+      grid-template-columns: minmax(0, 1fr);
     }}
     .simulation-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
     #resultado-simulacion {{
@@ -431,8 +496,10 @@ def _plantilla_html(datos_json: str) -> str:
       overflow: auto;
       min-height: 2.5rem;
       padding: 0.5rem 0.75rem;
+      border: 1px solid #c7eadc;
       border-left: 4px solid var(--route-second);
-      background: #edf8f2;
+      border-radius: 0.5rem;
+      background: #f2fcf7;
     }}
     #resultado-simulacion dl {{
       display: flex;
@@ -447,9 +514,6 @@ def _plantilla_html(datos_json: str) -> str:
       display: grid;
       grid-template-columns: 1fr;
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 800;
     }}
     .evaluation-controls h2 {{ margin: 0; font-size: 1rem; }}
@@ -458,12 +522,15 @@ def _plantilla_html(datos_json: str) -> str:
       overflow: auto;
       min-height: 2.5rem;
       padding: 0.5rem 0.75rem;
+      border: 1px solid #f0c9c6;
       border-left: 4px solid var(--prioritario);
-      background: #fdf2f1;
+      border-radius: 0.5rem;
+      background: #fff8f7;
     }}
     #resultado-evaluacion p {{ margin: 0 0 0.5rem; }}
     .tabla-evaluacion {{
       width: 100%;
+      min-width: 58rem;
       border-collapse: collapse;
       font-size: 0.8125rem;
     }}
@@ -497,7 +564,21 @@ def _plantilla_html(datos_json: str) -> str:
       height: 100%;
       background: var(--route-second);
     }}
-    #mapa {{ width: 100%; min-height: 28rem; }}
+    #mapa {{
+      grid-area: map;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 0.75rem;
+      box-shadow: var(--shadow);
+    }}
+    .evaluation-controls {{
+      margin: 0 0.9rem 0.9rem;
+      border-radius: 0.6rem;
+    }}
     .base-icon {{
       display: grid;
       place-items: center;
@@ -536,14 +617,19 @@ def _plantilla_html(datos_json: str) -> str:
     .popup-list li + li {{ margin-top: 0.1875rem; }}
     .leaflet-popup-content {{ min-width: 14rem; }}
     .leyenda {{
-      padding: 0.625rem 0.75rem;
+      max-height: min(32rem, calc(100vh - 2rem));
+      overflow: auto;
+      padding: 0.75rem 0.875rem;
       border: 1px solid var(--border);
-      background: #fffffff2;
-      box-shadow: 0 1px 4px #0003;
+      border-radius: 0.625rem;
+      background: #fffffff5;
+      box-shadow: 0 0.3rem 1rem #1e3a5f26;
       color: var(--text);
       line-height: 1.5;
+      backdrop-filter: blur(6px);
     }}
-    .leyenda strong {{ display: block; margin-bottom: 0.25rem; }}
+    .leyenda strong {{ display: block; margin: 0.35rem 0 0.25rem; color: var(--primary-dark); }}
+    .leyenda strong:first-child {{ margin-top: 0; }}
     .leyenda-item {{ display: flex; align-items: center; gap: 0.5rem; }}
     .leyenda-muestra {{
       width: 0.875rem;
@@ -571,10 +657,39 @@ def _plantilla_html(datos_json: str) -> str:
     .leyenda-muestra.establecimiento-excluido {{ background: #8a8f8c; opacity: 0.45; }}
     .leyenda-muestra.asignacion-atendida {{ background: var(--route-second); }}
     .leyenda-muestra.asignacion-sin-asignar {{ background: #8a8f8c; opacity: 0.45; }}
+    @media (max-width: 980px) {{
+      header {{
+        grid-template-columns: 1fr;
+        align-items: stretch;
+        gap: 0.75rem;
+      }}
+      .controls {{ grid-template-columns: 1fr 1fr minmax(12rem, 1fr); }}
+      .workspace {{
+        grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+      }}
+    }}
     @media (max-width: 760px) {{
       header {{ grid-template-columns: 1fr; align-items: stretch; }}
       .controls {{ grid-template-columns: 1fr 1fr; }}
       #resultado {{ grid-column: 1 / -1; }}
+      .workspace {{
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        padding: 0.75rem;
+      }}
+      #mapa {{
+        order: 1;
+        height: min(58vh, 32rem);
+        min-height: 22rem;
+        flex-basis: auto;
+      }}
+      .control-panel {{
+        order: 2;
+        overflow: visible;
+        padding-right: 0;
+      }}
+      .evaluation-controls {{ margin: 0 0.75rem 0.75rem; }}
       .alternative-controls {{ grid-template-columns: 1fr; }}
       .alternative-controls h2, #resultado-alternativa {{ grid-column: auto; }}
       .heuristic-controls {{ grid-template-columns: 1fr; }}
@@ -585,8 +700,15 @@ def _plantilla_html(datos_json: str) -> str:
       .simulation-controls h2, #resultado-simulacion {{ grid-column: auto; }}
     }}
     @media (max-width: 480px) {{
+      header {{ padding: 0.8rem; }}
+      h1 {{ font-size: 1.2rem; }}
+      .subtitle {{ font-size: 0.8rem; }}
       .controls {{ grid-template-columns: 1fr; }}
       #resultado {{ grid-column: auto; }}
+      .workspace {{ padding: 0.5rem; gap: 0.6rem; }}
+      #mapa {{ height: 58vh; min-height: 20rem; }}
+      .control-panel section {{ padding: 0.7rem; }}
+      .evaluation-controls {{ margin: 0 0.5rem 0.5rem; }}
     }}
   </style>
 </head>
@@ -608,35 +730,39 @@ def _plantilla_html(datos_json: str) -> str:
       <div id="resultado" role="status" aria-live="polite"></div>
     </div>
   </header>
-  <section class="alternative-controls" aria-labelledby="titulo-alternativas">
+  <div class="workspace">
+    <aside class="control-panel" aria-label="Controles de análisis">
+      <section class="alternative-controls" aria-labelledby="titulo-alternativas">
     <h2 id="titulo-alternativas">Visor manual de alternativas</h2>
     <div class="field"><label for="alternativa-ambulancia">Ambulancia</label><select id="alternativa-ambulancia"></select></div>
     <div class="field"><label for="alternativa-emergencia">Emergencia</label><select id="alternativa-emergencia"></select></div>
     <div class="field"><label for="alternativa-establecimiento">Establecimiento</label><select id="alternativa-establecimiento"></select></div>
     <div id="resultado-alternativa" role="status" aria-live="polite">Elegí los tres elementos para inspeccionar una alternativa.</div>
-  </section>
-  <section class="heuristic-controls" aria-labelledby="titulo-heuristicas">
+      </section>
+      <section class="heuristic-controls" aria-labelledby="titulo-heuristicas">
     <h2 id="titulo-heuristicas">Reducción de candidatos — Etapa 6</h2>
     <div class="field"><label for="heuristica-emergencia">Emergencia</label><select id="heuristica-emergencia"></select></div>
     <div class="field"><label for="heuristica-alternativa">Alternativa reducida</label><select id="heuristica-alternativa"></select></div>
     <div id="resultado-heuristica" role="status" aria-live="polite">Elegí una emergencia para ver los candidatos conservados.</div>
-  </section>
-  <section class="assignment-controls" aria-labelledby="titulo-asignacion">
+      </section>
+      <section class="assignment-controls" aria-labelledby="titulo-asignacion">
     <h2 id="titulo-asignacion">Asignación global — Etapa 7</h2>
     <div class="field"><label for="asignacion-conjunto">Conjunto de alternativas</label><select id="asignacion-conjunto"></select></div>
     <div id="resultado-asignacion" role="status" aria-live="polite">Elegí un conjunto para ver la asignación global.</div>
-  </section>
-  <section class="simulation-controls" aria-labelledby="titulo-simulacion">
+      </section>
+      <section class="simulation-controls" aria-labelledby="titulo-simulacion">
     <h2 id="titulo-simulacion">Simulación — Etapa 8</h2>
     <div class="field"><label for="simulacion-etapa">Etapa lógica</label><select id="simulacion-etapa"></select></div>
     <div class="field"><label for="simulacion-emergencia">Emergencia</label><select id="simulacion-emergencia"></select></div>
     <div id="resultado-simulacion" role="status" aria-live="polite">Elegí un conjunto de asignación para ver la simulación.</div>
-  </section>
+      </section>
+    </aside>
+    <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
+  </div>
   <section class="evaluation-controls" aria-labelledby="titulo-evaluacion">
     <h2 id="titulo-evaluacion">Evaluación comparativa — Etapa 9</h2>
     <div id="resultado-evaluacion" role="status" aria-live="polite">Cargando la comparación de escenarios…</div>
   </section>
-  <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
 
   <script id="datos-mapa" type="application/json">{datos_json}</script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
