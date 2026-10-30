@@ -18,6 +18,7 @@ from .asignacion import (
 )
 from .establecimientos import Establecimiento, cargar_establecimientos
 from .emergencias import Emergencia, analizar_conectividad, cargar_emergencias
+from .evaluacion import EvaluacionEscenarios, evaluar_escenarios as calcular_evaluacion
 from .geonode import descargar_geojson
 from .grafo import Grafo, construir_grafo
 from .heuristicas import (
@@ -26,6 +27,13 @@ from .heuristicas import (
     reducir_alternativas,
 )
 from .mapa import exportar_mapa
+from .simulacion import (
+    ETAPAS_SIMULACION,
+    PASO_FINAL,
+    ResultadoSimulacion,
+    Simulacion,
+    crear_simulacion,
+)
 
 
 FILTRO_CALLEJERO = "localidad='Pergamino' AND transitable='si'"
@@ -595,6 +603,453 @@ def _cargar_asignacion(
     )
 
 
+def _validar_etapa_simulacion(etapa: int) -> None:
+    if (
+        isinstance(etapa, bool)
+        or not isinstance(etapa, int)
+        or etapa < 0
+        or etapa > PASO_FINAL
+    ):
+        raise ValueError(
+            f"Etapa de simulación inexistente: {etapa} "
+            f"(válidas: 0 a {PASO_FINAL})"
+        )
+
+
+def _cargar_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False, etapa: int = 0,
+) -> Simulacion:
+    _validar_etapa_simulacion(etapa)
+    resultado, ambulancias, emergencias, establecimientos = _cargar_modelo(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+    )
+    asignacion = (
+        asignar_original(resultado, ambulancias, emergencias)
+        if original
+        else asignar_con_nivel(
+            resultado, ambulancias, emergencias, establecimientos, nivel
+        )
+    )
+    simulacion = crear_simulacion(
+        asignacion, resultado, ambulancias, emergencias, establecimientos
+    )
+    if etapa:
+        simulacion.avanzar(etapa)
+    return simulacion
+
+
+def _imprimir_resumen_simulacion(resultado: ResultadoSimulacion) -> None:
+    print("Simulación lógica — Etapa 8")
+    print(f"Asignación de origen: {resultado.etiqueta_asignacion}")
+    print(
+        f"Etapa: {resultado.paso}/{resultado.total_pasos} — "
+        f"{resultado.nombre_etapa}"
+    )
+    print("Tipo: lógica por etapas (sin tiempos reales)")
+    print(f"Atenciones: {resultado.cantidad_atenciones}")
+    print(f"Completadas: {resultado.cantidad_completadas}")
+    print(f"Emergencias sin asignar: {resultado.cantidad_sin_asignar}")
+    print(f"Cobertura completa: {'sí' if resultado.es_completa else 'no'}")
+    print(f"Costo total: {_metros(resultado.costo_total)}")
+    print(f"Distancia total: {_metros(resultado.distancia_total)}")
+    print(f"Penalizaciones: {_metros(resultado.penalizacion_total)}")
+    if not resultado.atenciones:
+        print("Atenciones: ninguna")
+    else:
+        print("Atenciones:")
+        for atencion in resultado.atenciones:
+            print(
+                f"  {atencion.emergencia_id} -> "
+                f"{atencion.ambulancia_id} (base {atencion.base_id}) -> "
+                f"{atencion.establecimiento_id}: "
+                f"emergencia {atencion.estado_emergencia}, "
+                f"ambulancia {atencion.estado_ambulancia}, "
+                f"{_metros(atencion.costo_seleccion)}"
+            )
+    if not resultado.emergencias_sin_asignar:
+        print("Emergencias sin asignar: ninguna")
+    else:
+        print("Emergencias sin asignar:")
+        for emergencia_id in resultado.emergencias_sin_asignar:
+            print(
+                f"  {emergencia_id}: "
+                f"{resultado.motivos_sin_asignar[emergencia_id]}"
+            )
+    print("Estados de emergencias:")
+    for emergencia in resultado.emergencias:
+        print(f"  {emergencia.emergencia_id}: {emergencia.estado}")
+    print("Estados de ambulancias:")
+    for ambulancia in resultado.ambulancias:
+        print(f"  {ambulancia.ambulancia_id}: {ambulancia.estado}")
+
+
+def _imprimir_detalle_simulacion(resultado: ResultadoSimulacion) -> None:
+    print(f"Detalle de la simulación ({resultado.etiqueta_asignacion}):")
+    print(
+        f"Etapa: {resultado.paso}/{resultado.total_pasos} — "
+        f"{resultado.nombre_etapa}"
+    )
+    encabezados = (
+        "Emergencia", "Estado", "Ambulancia", "Estado amb.", "Base",
+        "Destino", "Hacia emergencia", "Hacia destino", "Total",
+        "Penalización", "Costo", "Completada",
+    )
+    filas = [
+        (
+            atencion.emergencia_id, atencion.estado_emergencia,
+            atencion.ambulancia_id, atencion.estado_ambulancia,
+            atencion.base_id, atencion.establecimiento_id,
+            _metros(atencion.distancia_ambulancia_emergencia_m),
+            _metros(atencion.distancia_emergencia_establecimiento_m),
+            _metros(atencion.distancia_total_m),
+            _metros(atencion.penalizacion_establecimiento_m),
+            _metros(atencion.costo_seleccion),
+            "sí" if atencion.completada else "no",
+        )
+        for atencion in resultado.atenciones
+    ]
+    if not filas:
+        print("Atenciones: ninguna")
+    else:
+        anchos = [
+            max(len(encabezados[i]), *(len(fila[i]) for fila in filas))
+            for i in range(len(encabezados))
+        ]
+        formato = "  ".join(f"{{:<{ancho}}}" for ancho in anchos)
+        print(formato.format(*encabezados))
+        print(formato.format(*("-" * ancho for ancho in anchos)))
+        for fila in filas:
+            print(formato.format(*fila))
+    if not resultado.emergencias_sin_asignar:
+        print("Emergencias sin asignar: ninguna")
+    else:
+        print("Emergencias sin asignar:")
+        for emergencia_id in resultado.emergencias_sin_asignar:
+            print(
+                f"  {emergencia_id}: "
+                f"{resultado.motivos_sin_asignar[emergencia_id]}"
+            )
+    print("Estados de emergencias:")
+    for emergencia in resultado.emergencias:
+        print(
+            f"  {emergencia.emergencia_id}: {emergencia.estado}"
+            + (
+                f" (ambulancia {emergencia.ambulancia_id}, "
+                f"destino {emergencia.establecimiento_id})"
+                if emergencia.ambulancia_id
+                else ""
+            )
+        )
+    print("Estados de ambulancias:")
+    for ambulancia in resultado.ambulancias:
+        print(
+            f"  {ambulancia.ambulancia_id}: {ambulancia.estado}"
+            + (
+                f" (emergencia {ambulancia.emergencia_id})"
+                if ambulancia.emergencia_id
+                else ""
+            )
+        )
+
+
+def iniciar_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False,
+) -> None:
+    simulacion = _cargar_simulacion(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+        nivel, original, 0,
+    )
+    _imprimir_resumen_simulacion(simulacion.resultado())
+
+
+def resumir_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False, etapa: int = PASO_FINAL,
+) -> None:
+    simulacion = _cargar_simulacion(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+        nivel, original, etapa,
+    )
+    _imprimir_resumen_simulacion(simulacion.resultado())
+
+
+def listar_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False, etapa: int = PASO_FINAL,
+) -> None:
+    simulacion = _cargar_simulacion(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+        nivel, original, etapa,
+    )
+    _imprimir_detalle_simulacion(simulacion.resultado())
+
+
+def avanzar_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False,
+    pasos: int = 1, hasta_final: bool = False,
+) -> None:
+    simulacion = _cargar_simulacion(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+        nivel, original, 0,
+    )
+    if hasta_final:
+        simulacion.avanzar_hasta_final()
+    else:
+        simulacion.avanzar(pasos)
+    _imprimir_resumen_simulacion(simulacion.resultado())
+
+
+def ver_simulacion(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+    nivel: int = 1, original: bool = False, etapa: int = PASO_FINAL,
+    emergencia_id: str | None = None, ambulancia_id: str | None = None,
+) -> None:
+    if (emergencia_id is None) == (ambulancia_id is None):
+        raise ValueError("Indicá exactamente una emergencia o una ambulancia")
+    simulacion = _cargar_simulacion(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+        nivel, original, etapa,
+    )
+    resultado = simulacion.resultado()
+
+    if emergencia_id is not None:
+        estado = next(
+            (
+                emergencia
+                for emergencia in resultado.emergencias
+                if emergencia.emergencia_id == emergencia_id
+            ),
+            None,
+        )
+        if estado is None:
+            raise ValueError(f"Emergencia inexistente: {emergencia_id}")
+        print(f"Emergencia {emergencia_id}:")
+        print(f"  Estado: {estado.estado}")
+        print(f"  Completada: {'sí' if estado.completada else 'no'}")
+        if estado.ambulancia_id is None:
+            print(
+                "  Sin asignación: "
+                f"{estado.motivo_sin_asignar or 'motivo_no_informado'}"
+            )
+            return
+        atencion = next(
+            atencion
+            for atencion in resultado.atenciones
+            if atencion.emergencia_id == emergencia_id
+        )
+        print(
+            f"  Ambulancia: {atencion.ambulancia_id} "
+            f"(base {atencion.base_id}, estado {atencion.estado_ambulancia})"
+        )
+        print(f"  Destino: {atencion.establecimiento_id}")
+        print(
+            "  Tramo ambulancia -> emergencia: "
+            f"{_metros(atencion.distancia_ambulancia_emergencia_m)} "
+            f"({len(atencion.tramo_ambulancia_emergencia.camino)} nodos)"
+        )
+        print(
+            "  Tramo emergencia -> destino: "
+            f"{_metros(atencion.distancia_emergencia_establecimiento_m)} "
+            f"({len(atencion.tramo_emergencia_establecimiento.camino)} nodos)"
+        )
+        print(f"  Distancia total: {_metros(atencion.distancia_total_m)}")
+        print(
+            "  Penalización: "
+            f"{_metros(atencion.penalizacion_establecimiento_m)}"
+        )
+        print(f"  Costo: {_metros(atencion.costo_seleccion)}")
+        return
+
+    estado = next(
+        (
+            ambulancia
+            for ambulancia in resultado.ambulancias
+            if ambulancia.ambulancia_id == ambulancia_id
+        ),
+        None,
+    )
+    if estado is None:
+        raise ValueError(f"Ambulancia inexistente: {ambulancia_id}")
+    print(f"Ambulancia {ambulancia_id}:")
+    print(f"  Base: {estado.base_id}")
+    print(f"  Estado: {estado.estado}")
+    if estado.emergencia_id is None:
+        print("  Sin emergencia asignada")
+        return
+    atencion = next(
+        atencion
+        for atencion in resultado.atenciones
+        if atencion.ambulancia_id == ambulancia_id
+    )
+    print(f"  Emergencia: {atencion.emergencia_id}")
+    print(f"  Destino: {atencion.establecimiento_id}")
+    print(f"  Estado de la emergencia: {atencion.estado_emergencia}")
+    print(
+        "  Tramo ambulancia -> emergencia: "
+        f"{_metros(atencion.distancia_ambulancia_emergencia_m)}"
+    )
+    print(
+        "  Tramo emergencia -> destino: "
+        f"{_metros(atencion.distancia_emergencia_establecimiento_m)}"
+    )
+    print(f"  Costo: {_metros(atencion.costo_seleccion)}")
+
+
+def _imprimir_evaluacion(evaluacion: EvaluacionEscenarios) -> None:
+    print("Evaluación de escenarios — Etapa 9")
+    print(
+        "Comparación dinámica entre la asignación original y los niveles "
+        "1 a 4."
+    )
+    print(
+        "La simulación asociada es lógica por etapas, sin tiempos reales."
+    )
+    encabezados = (
+        "Escenario",
+        "Generadas",
+        "Factibles",
+        "Conservadas",
+        "Evaluadas",
+        "Reducción",
+        "Atendidas",
+        "Sin asignar",
+        "Costo",
+        "Distancia",
+        "Penalizaciones",
+    )
+    filas = [
+        (
+            metricas.etiqueta,
+            str(metricas.alternativas_generadas),
+            str(metricas.alternativas_factibles),
+            str(metricas.alternativas_conservadas),
+            str(metricas.alternativas_evaluadas),
+            f"{metricas.porcentaje_reduccion:.2f} %",
+            str(metricas.emergencias_atendidas),
+            str(metricas.emergencias_sin_asignar),
+            _metros(metricas.costo_total),
+            _metros(metricas.distancia_total),
+            _metros(metricas.penalizacion_total),
+        )
+        for metricas in evaluacion.escenarios
+    ]
+    anchos = [
+        max(len(encabezados[i]), *(len(fila[i]) for fila in filas))
+        for i in range(len(encabezados))
+    ]
+    formato = "  ".join(f"{{:<{ancho}}}" for ancho in anchos)
+    print(formato.format(*encabezados))
+    print(formato.format(*("-" * ancho for ancho in anchos)))
+    for fila in filas:
+        print(formato.format(*fila))
+
+    print("Asignaciones por escenario:")
+    for metricas in evaluacion.escenarios:
+        print(f"  {metricas.etiqueta}:")
+        if not metricas.asignaciones:
+            print("    Ninguna")
+        for asignacion in metricas.asignaciones:
+            print(
+                f"    {asignacion.emergencia_id} -> "
+                f"{asignacion.ambulancia_id} "
+                f"(base {asignacion.base_id}) -> "
+                f"{asignacion.establecimiento_id}: "
+                f"{_metros(asignacion.costo_seleccion)}"
+            )
+        if metricas.diferencias_respecto_original:
+            print("    Diferencias respecto del original:")
+            for diferencia in metricas.diferencias_respecto_original:
+                print(
+                    f"      {diferencia.emergencia_id}: "
+                    f"{diferencia.original or 'sin asignación'} -> "
+                    f"{diferencia.escenario or 'sin asignación'} "
+                    f"({diferencia.tipo})"
+                )
+        else:
+            print(
+                "    Sin diferencias de asignación respecto del original."
+            )
+        if metricas.motivos_sin_asignar:
+            print("    Motivos de emergencias sin asignar:")
+            for emergencia_id, motivo in metricas.motivos_sin_asignar.items():
+                print(f"      {emergencia_id}: {motivo}")
+
+    print("Estados finales de la simulación:")
+    for metricas in evaluacion.escenarios:
+        print(f"  {metricas.etiqueta}:")
+        print(
+            "    Emergencias: "
+            + ", ".join(
+                f"{emergencia_id}={estado}"
+                for emergencia_id, estado
+                in metricas.estados_finales_emergencias.items()
+            )
+        )
+        print(
+            "    Ambulancias: "
+            + ", ".join(
+                f"{ambulancia_id}={estado}"
+                for ambulancia_id, estado
+                in metricas.estados_finales_ambulancias.items()
+            )
+        )
+
+    print("Resumen:")
+    print(
+        "  Nivel recomendado: "
+        f"{evaluacion.nivel_recomendado if evaluacion.nivel_recomendado is not None else '—'}"
+    )
+    print(
+        "  Pérdida por heurística: "
+        f"{'sí' if evaluacion.perdida_por_heuristica else 'no'}"
+    )
+    print(
+        "  Niveles con pérdida: "
+        + (
+            ", ".join(str(nivel) for nivel in evaluacion.niveles_con_perdida)
+            if evaluacion.niveles_con_perdida
+            else "ninguno"
+        )
+    )
+    print(
+        "  Mismos resultados de asignación: "
+        f"{'sí' if evaluacion.todos_mismos_resultados else 'no'}"
+    )
+    print(
+        "  Mismos costos: "
+        f"{'sí' if evaluacion.todos_mismos_costos else 'no'}"
+    )
+
+
+def evaluar_escenarios(
+    entrada: Path, configuracion_ambulancias: Path,
+    configuracion_emergencias: Path, configuracion_establecimientos: Path,
+) -> None:
+    resultado, ambulancias, emergencias, establecimientos = _cargar_modelo(
+        entrada, configuracion_ambulancias,
+        configuracion_emergencias, configuracion_establecimientos,
+    )
+    evaluacion = calcular_evaluacion(
+        resultado, ambulancias, emergencias, establecimientos
+    )
+    _imprimir_evaluacion(evaluacion)
+
+
 def resumir_asignacion(
     entrada: Path, configuracion_ambulancias: Path,
     configuracion_emergencias: Path, configuracion_establecimientos: Path,
@@ -779,6 +1234,133 @@ def main() -> None:
         default=Path("config/establecimientos.json"),
     )
 
+    ayudas_simulacion = {
+        "iniciar-simulacion": (
+            "Muestra el estado inicial de la simulación lógica"
+        ),
+        "resumir-simulacion": (
+            "Resume estados, atenciones y costos de la simulación"
+        ),
+        "listar-simulacion": (
+            "Lista el detalle de cada atención simulada"
+        ),
+        "avanzar-simulacion": (
+            "Avanza la simulación desde la etapa inicial"
+        ),
+        "ver-simulacion": (
+            "Consulta una emergencia o una ambulancia simulada"
+        ),
+    }
+    simulacion_parsers = {
+        nombre: subparsers.add_parser(
+            nombre,
+            help=ayuda,
+            description=ayuda + ". La simulación es lógica por etapas, sin tiempos reales.",
+        )
+        for nombre, ayuda in ayudas_simulacion.items()
+    }
+    for nombre, subparser in simulacion_parsers.items():
+        subparser.add_argument(
+            "--entrada",
+            type=Path,
+            default=Path("data/pergamino.json"),
+            help="Grafo y bases de ambulancias",
+        )
+        subparser.add_argument(
+            "--ambulancias",
+            type=Path,
+            default=Path("config/ambulancias.json"),
+            help="Configuración de ambulancias",
+        )
+        subparser.add_argument(
+            "--emergencias",
+            type=Path,
+            default=Path("config/emergencias.json"),
+            help="Configuración de emergencias",
+        )
+        subparser.add_argument(
+            "--establecimientos",
+            type=Path,
+            default=Path("config/establecimientos.json"),
+            help="Configuración de establecimientos de destino",
+        )
+        grupo_conjunto = subparser.add_mutually_exclusive_group()
+        grupo_conjunto.add_argument(
+            "--nivel",
+            type=int,
+            default=1,
+            help="Nivel de reducción heurística usado para asignar (1 a 4)",
+        )
+        grupo_conjunto.add_argument(
+            "--original",
+            action="store_true",
+            help="Usar el conjunto completo de alternativas originales",
+        )
+        if nombre not in {"iniciar-simulacion", "avanzar-simulacion"}:
+            subparser.add_argument(
+                "--etapa",
+                type=int,
+                default=PASO_FINAL,
+                help=f"Etapa lógica a consultar (0 a {PASO_FINAL})",
+            )
+
+    avanzar_parser = simulacion_parsers["avanzar-simulacion"]
+    grupo_avance = avanzar_parser.add_mutually_exclusive_group()
+    grupo_avance.add_argument(
+        "--pasos",
+        type=int,
+        default=1,
+        help="Cantidad de etapas lógicas a avanzar",
+    )
+    grupo_avance.add_argument(
+        "--hasta-final",
+        action="store_true",
+        help="Avanzar directamente hasta la etapa final",
+    )
+
+    ver_parser = simulacion_parsers["ver-simulacion"]
+    grupo_entidad = ver_parser.add_mutually_exclusive_group(required=True)
+    grupo_entidad.add_argument(
+        "--emergencia", help="Identificador de la emergencia a consultar"
+    )
+    grupo_entidad.add_argument(
+        "--ambulancia", help="Identificador de la ambulancia a consultar"
+    )
+
+    evaluacion_parser = subparsers.add_parser(
+        "evaluar-escenarios",
+        help="Compara el escenario original con los niveles heurísticos 1 a 4",
+        description=(
+            "Compara alternativas, asignaciones, costos, distancias, "
+            "penalizaciones y estados finales de la simulación para el "
+            "escenario original y los niveles 1 a 4."
+        ),
+    )
+    evaluacion_parser.add_argument(
+        "--entrada",
+        type=Path,
+        default=Path("data/pergamino.json"),
+        help="Grafo y bases de ambulancias",
+    )
+    evaluacion_parser.add_argument(
+        "--ambulancias",
+        type=Path,
+        default=Path("config/ambulancias.json"),
+        help="Configuración de ambulancias",
+    )
+    evaluacion_parser.add_argument(
+        "--emergencias",
+        type=Path,
+        default=Path("config/emergencias.json"),
+        help="Configuración de emergencias",
+    )
+    evaluacion_parser.add_argument(
+        "--establecimientos",
+        type=Path,
+        default=Path("config/establecimientos.json"),
+        help="Configuración de establecimientos de destino",
+    )
+
     mapa_parser = subparsers.add_parser("exportar-mapa")
     mapa_parser.add_argument("--entrada", type=Path, default=Path("data/pergamino.json"))
     mapa_parser.add_argument(
@@ -874,6 +1456,61 @@ def main() -> None:
     elif argumentos.comando == "comparar-asignaciones":
         try:
             comparar_asignaciones(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "iniciar-simulacion":
+        try:
+            iniciar_simulacion(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+                argumentos.nivel, argumentos.original,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "resumir-simulacion":
+        try:
+            resumir_simulacion(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+                argumentos.nivel, argumentos.original, argumentos.etapa,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "listar-simulacion":
+        try:
+            listar_simulacion(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+                argumentos.nivel, argumentos.original, argumentos.etapa,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "avanzar-simulacion":
+        try:
+            avanzar_simulacion(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+                argumentos.nivel, argumentos.original,
+                argumentos.pasos, argumentos.hasta_final,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "ver-simulacion":
+        try:
+            ver_simulacion(
+                argumentos.entrada, argumentos.ambulancias,
+                argumentos.emergencias, argumentos.establecimientos,
+                argumentos.nivel, argumentos.original, argumentos.etapa,
+                argumentos.emergencia, argumentos.ambulancia,
+            )
+        except ValueError as error:
+            parser.error(str(error))
+    elif argumentos.comando == "evaluar-escenarios":
+        try:
+            evaluar_escenarios(
                 argumentos.entrada, argumentos.ambulancias,
                 argumentos.emergencias, argumentos.establecimientos,
             )

@@ -12,8 +12,90 @@ from .alternativas import construir_alternativas
 from .asignacion import comparar_niveles
 from .establecimientos import cargar_establecimientos
 from .emergencias import cargar_emergencias
+from .evaluacion import evaluar_escenarios
 from .grafo import Grafo
 from .heuristicas import reducir_alternativas
+from .simulacion import ETAPAS_SIMULACION, crear_simulacion
+
+
+def _datos_simulacion_mapa(
+    asignacion: Any,
+    resultado_alternativas: Any,
+    ambulancias: Any,
+    emergencias: Any,
+    establecimientos: Any,
+) -> dict[str, Any]:
+    simulacion = crear_simulacion(
+        asignacion,
+        resultado_alternativas,
+        ambulancias,
+        emergencias,
+        establecimientos,
+    )
+    resultados = []
+    for paso in range(len(ETAPAS_SIMULACION)):
+        if paso:
+            simulacion.avanzar()
+        resultados.append(simulacion.resultado())
+
+    inicial = resultados[0]
+    final = resultados[-1]
+    return {
+        "etiqueta": asignacion.etiqueta,
+        "total_pasos": final.total_pasos,
+        "costo_total": final.costo_total,
+        "distancia_total": final.distancia_total,
+        "penalizacion_total": final.penalizacion_total,
+        "cantidad_atenciones": final.cantidad_atenciones,
+        "cantidad_completadas": final.cantidad_completadas,
+        "cantidad_sin_asignar": final.cantidad_sin_asignar,
+        "es_completa": final.es_completa,
+        "atenciones": [
+            {
+                "emergencia_id": atencion.emergencia_id,
+                "ambulancia_id": atencion.ambulancia_id,
+                "base_id": atencion.base_id,
+                "establecimiento_id": atencion.establecimiento_id,
+                "distancia_ambulancia_emergencia_m": (
+                    atencion.distancia_ambulancia_emergencia_m
+                ),
+                "distancia_emergencia_establecimiento_m": (
+                    atencion.distancia_emergencia_establecimiento_m
+                ),
+                "distancia_total_m": atencion.distancia_total_m,
+                "penalizacion_establecimiento_m": (
+                    atencion.penalizacion_establecimiento_m
+                ),
+                "costo_seleccion": atencion.costo_seleccion,
+                "ruta_ambulancia_emergencia": (
+                    f"{atencion.ambulancia_id}|{atencion.emergencia_id}"
+                ),
+                "ruta_emergencia_establecimiento": (
+                    f"{atencion.emergencia_id}|{atencion.establecimiento_id}"
+                ),
+            }
+            for atencion in inicial.atenciones
+        ],
+        "emergencias_sin_asignar": list(final.emergencias_sin_asignar),
+        "motivos_sin_asignar": dict(final.motivos_sin_asignar),
+        "estados": [
+            {
+                "paso": resultado.paso,
+                "etapa": resultado.etapa,
+                "nombre": resultado.nombre_etapa,
+                "emergencias": {
+                    emergencia.emergencia_id: asdict(emergencia)
+                    for emergencia in resultado.emergencias
+                },
+                "ambulancias": {
+                    ambulancia.ambulancia_id: asdict(ambulancia)
+                    for ambulancia in resultado.ambulancias
+                },
+                "cantidad_completadas": resultado.cantidad_completadas,
+            }
+            for resultado in resultados
+        ],
+    }
 
 
 def preparar_datos_mapa(
@@ -34,6 +116,9 @@ def preparar_datos_mapa(
         resultado_alternativas, ambulancias, emergencias, establecimientos
     )
     comparacion_asignaciones = comparar_niveles(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
+    )
+    evaluacion = evaluar_escenarios(
         resultado_alternativas, ambulancias, emergencias, establecimientos
     )
 
@@ -67,6 +152,25 @@ def preparar_datos_mapa(
             "coordenadas": [list(reversed(grafo.nodos[nodo])) for nodo in camino],
         }
 
+    asignaciones = {
+        "original": comparacion_asignaciones.original,
+        **{
+            f"nivel-{resultado_nivel.parametros.nivel}": resultado_nivel
+            for resultado_nivel in comparacion_asignaciones.niveles
+            if resultado_nivel.parametros is not None
+        },
+    }
+    simulaciones = {
+        clave: _datos_simulacion_mapa(
+            asignacion,
+            resultado_alternativas,
+            ambulancias,
+            emergencias,
+            establecimientos,
+        )
+        for clave, asignacion in asignaciones.items()
+    }
+
     return {
         "datos_simulados": True,
         "tramos": tramos,
@@ -95,12 +199,22 @@ def preparar_datos_mapa(
             ],
         },
         "asignaciones": {
-            "original": asdict(comparacion_asignaciones.original),
-            **{
-                f"nivel-{resultado_nivel.parametros.nivel}": asdict(resultado_nivel)
-                for resultado_nivel in comparacion_asignaciones.niveles
-                if resultado_nivel.parametros is not None
-            },
+            clave: asdict(asignacion)
+            for clave, asignacion in asignaciones.items()
+        },
+        "simulaciones": simulaciones,
+        "etapas_simulacion": [
+            asdict(etapa) for etapa in ETAPAS_SIMULACION
+        ],
+        "evaluacion": {
+            "escenarios": [
+                asdict(metricas) for metricas in evaluacion.escenarios
+            ],
+            "nivel_recomendado": evaluacion.nivel_recomendado,
+            "perdida_por_heuristica": evaluacion.perdida_por_heuristica,
+            "niveles_con_perdida": list(evaluacion.niveles_con_perdida),
+            "todos_mismos_resultados": evaluacion.todos_mismos_resultados,
+            "todos_mismos_costos": evaluacion.todos_mismos_costos,
         },
         "comparacion_asignaciones": {
             "nivel_recomendado": comparacion_asignaciones.nivel_recomendado,
@@ -182,7 +296,7 @@ def _plantilla_html(datos_json: str) -> str:
     html, body {{ height: 100%; margin: 0; }}
     body {{
       display: grid;
-      grid-template-rows: auto auto auto auto 1fr;
+      grid-template-rows: auto auto auto auto auto auto 1fr;
       min-height: 100%;
       background: var(--surface-muted);
       color: var(--text);
@@ -301,6 +415,88 @@ def _plantilla_html(datos_json: str) -> str:
     #resultado-asignacion div {{ display: flex; gap: 0.25rem; }}
     #resultado-asignacion dt {{ font-weight: 700; }}
     #resultado-asignacion dd {{ margin: 0; }}
+    .simulation-controls {{
+      display: grid;
+      grid-template-columns: minmax(10rem, 14rem) minmax(12rem, 18rem) 1fr;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      z-index: 800;
+    }}
+    .simulation-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-simulacion {{
+      grid-column: 1 / -1;
+      max-height: 16rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 4px solid var(--route-second);
+      background: #edf8f2;
+    }}
+    #resultado-simulacion dl {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem;
+      margin: 0 0 0.5rem;
+    }}
+    #resultado-simulacion div {{ display: flex; gap: 0.25rem; }}
+    #resultado-simulacion dt {{ font-weight: 700; }}
+    #resultado-simulacion dd {{ margin: 0; }}
+    .evaluation-controls {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      z-index: 800;
+    }}
+    .evaluation-controls h2 {{ margin: 0; font-size: 1rem; }}
+    #resultado-evaluacion {{
+      max-height: 18rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border-left: 4px solid var(--prioritario);
+      background: #fdf2f1;
+    }}
+    #resultado-evaluacion p {{ margin: 0 0 0.5rem; }}
+    .tabla-evaluacion {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+    }}
+    .tabla-evaluacion th,
+    .tabla-evaluacion td {{
+      padding: 0.25rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }}
+    .tabla-evaluacion th:first-child,
+    .tabla-evaluacion td:first-child {{ text-align: left; }}
+    .tabla-evaluacion thead th {{
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      font-weight: 700;
+    }}
+    .barra-reduccion {{
+      display: inline-block;
+      width: 4rem;
+      height: 0.5rem;
+      margin-right: 0.375rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e3e8e5;
+      vertical-align: middle;
+    }}
+    .barra-reduccion span {{
+      display: block;
+      height: 100%;
+      background: var(--route-second);
+    }}
     #mapa {{ width: 100%; min-height: 28rem; }}
     .base-icon {{
       display: grid;
@@ -385,6 +581,8 @@ def _plantilla_html(datos_json: str) -> str:
       .heuristic-controls h2, #resultado-heuristica {{ grid-column: auto; }}
       .assignment-controls {{ grid-template-columns: 1fr; }}
       .assignment-controls h2, #resultado-asignacion {{ grid-column: auto; }}
+      .simulation-controls {{ grid-template-columns: 1fr; }}
+      .simulation-controls h2, #resultado-simulacion {{ grid-column: auto; }}
     }}
     @media (max-width: 480px) {{
       .controls {{ grid-template-columns: 1fr; }}
@@ -427,6 +625,16 @@ def _plantilla_html(datos_json: str) -> str:
     <h2 id="titulo-asignacion">Asignación global — Etapa 7</h2>
     <div class="field"><label for="asignacion-conjunto">Conjunto de alternativas</label><select id="asignacion-conjunto"></select></div>
     <div id="resultado-asignacion" role="status" aria-live="polite">Elegí un conjunto para ver la asignación global.</div>
+  </section>
+  <section class="simulation-controls" aria-labelledby="titulo-simulacion">
+    <h2 id="titulo-simulacion">Simulación — Etapa 8</h2>
+    <div class="field"><label for="simulacion-etapa">Etapa lógica</label><select id="simulacion-etapa"></select></div>
+    <div class="field"><label for="simulacion-emergencia">Emergencia</label><select id="simulacion-emergencia"></select></div>
+    <div id="resultado-simulacion" role="status" aria-live="polite">Elegí un conjunto de asignación para ver la simulación.</div>
+  </section>
+  <section class="evaluation-controls" aria-labelledby="titulo-evaluacion">
+    <h2 id="titulo-evaluacion">Evaluación comparativa — Etapa 9</h2>
+    <div id="resultado-evaluacion" role="status" aria-live="polite">Cargando la comparación de escenarios…</div>
   </section>
   <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
 
@@ -782,7 +990,10 @@ def _plantilla_html(datos_json: str) -> str:
     reiniciarAlternativasHeuristicas();
 
     const selectorAsignacion = document.getElementById("asignacion-conjunto");
+    const selectorSimulacionEtapa = document.getElementById("simulacion-etapa");
+    const selectorSimulacionEmergencia = document.getElementById("simulacion-emergencia");
     const resultadoAsignacion = document.getElementById("resultado-asignacion");
+    const resultadoSimulacion = document.getElementById("resultado-simulacion");
     const capaAsignacionRutas = L.layerGroup().addTo(mapa);
     const capaAsignacionEstablecimientos = L.layerGroup().addTo(mapa);
     const opcionAsignacion = new Option("Seleccionar conjunto…", "", true, true);
@@ -796,6 +1007,30 @@ def _plantilla_html(datos_json: str) -> str:
         : `Nivel ${{nivel}}`;
       selectorAsignacion.add(new Option(etiqueta, `nivel-${{nivel}}`));
     }});
+
+    datos.etapas_simulacion.forEach((etapa) => {{
+      selectorSimulacionEtapa.add(
+        new Option(`${{etapa.paso}} — ${{etapa.nombre}}`, String(etapa.paso))
+      );
+    }});
+    selectorSimulacionEmergencia.add(new Option("Todas las emergencias", ""));
+    datos.emergencias.forEach((emergencia) => {{
+      selectorSimulacionEmergencia.add(
+        new Option(`${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`, emergencia.id)
+      );
+    }});
+
+    const etiquetasEstado = {{
+      asignada: "asignada",
+      en_camino: "en camino",
+      en_atencion: "en atención",
+      trasladada: "trasladada",
+      trasladando: "trasladando",
+      finalizada: "finalizada",
+      sin_asignacion: "sin asignación",
+      disponible: "disponible"
+    }};
+    const mostrarEstado = (estado) => etiquetasEstado[estado] || estado;
 
     function limpiarCapasAsignacion() {{
       capaAsignacionRutas.clearLayers();
@@ -811,9 +1046,30 @@ def _plantilla_html(datos_json: str) -> str:
       }});
     }}
 
+    function reiniciarSimulacionUI() {{
+      selectorSimulacionEtapa.value = "0";
+      selectorSimulacionEmergencia.value = "";
+      resultadoSimulacion.textContent = "Elegí un conjunto de asignación para ver la simulación.";
+    }}
+
     function reiniciarAsignacionUI() {{
       selectorAsignacion.selectedIndex = 0;
       resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+      reiniciarSimulacionUI();
+    }}
+
+    function estiloTramo(paso, tipo) {{
+      if (tipo === "inicial") {{
+        return paso <= 2
+          ? {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}
+          : {{ color: "#7b2cbf", weight: 4, opacity: 0.42 }};
+      }}
+      if (paso <= 2) {{
+        return {{
+          color: "#00875a", weight: 4, opacity: 0.4, dashArray: "8 8"
+        }};
+      }}
+      return {{ color: "#00875a", weight: 5, opacity: 0.92 }};
     }}
 
     function aplicarAsignacion() {{
@@ -825,13 +1081,21 @@ def _plantilla_html(datos_json: str) -> str:
       const clave = selectorAsignacion.value;
       if (!clave) {{
         resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+        reiniciarSimulacionUI();
         return;
       }}
       const asignacion = datos.asignaciones[clave];
-      if (!asignacion) {{
+      const simulacion = datos.simulaciones[clave];
+      if (!asignacion || !simulacion) {{
         resultadoAsignacion.textContent = "El conjunto seleccionado no tiene datos.";
+        reiniciarSimulacionUI();
         return;
       }}
+      const paso = Number(selectorSimulacionEtapa.value || "0");
+      const estadoSimulacion = simulacion.estados[paso] || simulacion.estados[0];
+      const estadoEmergencias = estadoSimulacion.emergencias;
+      const estadoAmbulancias = estadoSimulacion.ambulancias;
+      const emergenciaFiltro = selectorSimulacionEmergencia.value;
 
       const usadas = new Set(asignacion.ambulancias_utilizadas);
       datos.ambulancias.forEach((ambulancia) => {{
@@ -845,6 +1109,9 @@ def _plantilla_html(datos_json: str) -> str:
         marcador.setOpacity(atendidas.has(emergencia.id) ? 1 : 0.35);
         if (atendidas.has(emergencia.id)) marcador.setZIndexOffset(1000);
       }});
+      if (emergenciaFiltro && marcadoresEmergencia[emergenciaFiltro]) {{
+        marcadoresEmergencia[emergenciaFiltro].setZIndexOffset(2000);
+      }}
 
       const elegidos = new Set(asignacion.establecimientos_seleccionados);
       datos.establecimientos.forEach((establecimiento) => {{
@@ -860,8 +1127,13 @@ def _plantilla_html(datos_json: str) -> str:
         }}).addTo(capaAsignacionEstablecimientos);
       }});
 
+      const alternativas = emergenciaFiltro
+        ? asignacion.alternativas.filter(
+            (alternativa) => alternativa.emergencia_id === emergenciaFiltro
+          )
+        : asignacion.alternativas;
       const capas = [];
-      asignacion.alternativas.forEach((alternativa) => {{
+      alternativas.forEach((alternativa) => {{
         const rutaInicial = datos.rutas_ambulancia_emergencia[
           `${{alternativa.ambulancia_id}}|${{alternativa.emergencia_id}}`
         ];
@@ -869,16 +1141,16 @@ def _plantilla_html(datos_json: str) -> str:
           `${{alternativa.emergencia_id}}|${{alternativa.establecimiento_id}}`
         ];
         if (rutaInicial && rutaInicial.coordenadas.length) {{
-          capas.push(L.polyline(rutaInicial.coordenadas, {{
-            color: "#7b2cbf", weight: 5, opacity: 0.92
-          }}).bindTooltip(
+          capas.push(L.polyline(
+            rutaInicial.coordenadas, estiloTramo(paso, "inicial")
+          ).bindTooltip(
             `${{alternativa.ambulancia_id}} → ${{alternativa.emergencia_id}}`
           ).addTo(capaAsignacionRutas));
         }}
         if (rutaDestino && rutaDestino.coordenadas.length) {{
-          capas.push(L.polyline(rutaDestino.coordenadas, {{
-            color: "#00875a", weight: 5, opacity: 0.92
-          }}).bindTooltip(
+          capas.push(L.polyline(
+            rutaDestino.coordenadas, estiloTramo(paso, "destino")
+          ).bindTooltip(
             `${{alternativa.emergencia_id}} → ${{alternativa.establecimiento_id}}`
           ).addTo(capaAsignacionRutas));
         }}
@@ -887,17 +1159,26 @@ def _plantilla_html(datos_json: str) -> str:
         mapa.fitBounds(L.featureGroup(capas).getBounds(), {{
           padding: [36, 36], maxZoom: 16
         }});
+      }} else if (emergenciaFiltro) {{
+        const emergencia = datos.emergencias.find(
+          (item) => item.id === emergenciaFiltro
+        );
+        if (emergencia) mapa.setView([emergencia.latitud, emergencia.longitud], 15);
       }}
 
       const etiquetaConjunto = clave === "original"
         ? "originales"
         : `nivel ${{clave.replace("nivel-", "")}}`;
-      const detalle = asignacion.alternativas.map((alternativa) => (
-        `<li>${{escapar(alternativa.emergencia_id)}} → ` +
-        `${{escapar(alternativa.ambulancia_id)}} → ` +
-        `${{escapar(alternativa.establecimiento_id)}} ` +
-        `(${{mostrarMetros(alternativa.costo_seleccion)}})</li>`
-      )).join("") || "<li>Ninguna</li>";
+      const detalle = asignacion.alternativas.map((alternativa) => {{
+        const estadoEmergencia = estadoEmergencias[alternativa.emergencia_id];
+        const estadoAmbulancia = estadoAmbulancias[alternativa.ambulancia_id];
+        return `<li>${{escapar(alternativa.emergencia_id)}} → ` +
+          `${{escapar(alternativa.ambulancia_id)}} → ` +
+          `${{escapar(alternativa.establecimiento_id)}} ` +
+          `(${{mostrarMetros(alternativa.costo_seleccion)}})<br>` +
+          `<span>Emergencia: ${{mostrarEstado(estadoEmergencia ? estadoEmergencia.estado : "—")}}; ` +
+          `ambulancia: ${{mostrarEstado(estadoAmbulancia ? estadoAmbulancia.estado : "—")}}</span></li>`;
+      }}).join("") || "<li>Ninguna</li>";
       const sinAsignar = asignacion.emergencias_sin_asignar.map(
         (emergenciaId) => (
           `<li>${{escapar(emergenciaId)}}: ` +
@@ -920,10 +1201,121 @@ def _plantilla_html(datos_json: str) -> str:
       </dl>
       <ul class="popup-list"><li><strong>Asignaciones</strong></li>${{detalle}}</ul>
       <ul class="popup-list"><li><strong>Sin asignar</strong></li>${{sinAsignar}}</ul>`;
+
+      const estadosEmergencias = datos.emergencias.map((emergencia) => {{
+        const estado = estadoEmergencias[emergencia.id];
+        return `<li>${{escapar(emergencia.id)}}: ` +
+          `${{mostrarEstado(estado ? estado.estado : "—")}}</li>`;
+      }}).join("") || "<li>Ninguna</li>";
+      const estadosAmbulancias = datos.ambulancias.map((ambulancia) => {{
+        const estado = estadoAmbulancias[ambulancia.id];
+        return `<li>${{escapar(ambulancia.id)}}: ` +
+          `${{mostrarEstado(estado ? estado.estado : "—")}}</li>`;
+      }}).join("") || "<li>Ninguna</li>";
+      let detalleSeleccion = "";
+      if (emergenciaFiltro) {{
+        const estado = estadoEmergencias[emergenciaFiltro];
+        const atencion = simulacion.atenciones.find(
+          (item) => item.emergencia_id === emergenciaFiltro
+        );
+        if (atencion) {{
+          detalleSeleccion = `<div><dt>Emergencia seleccionada:</dt>` +
+            `<dd>${{escapar(emergenciaFiltro)}} — ${{mostrarEstado(estado.estado)}}; ` +
+            `ambulancia ${{escapar(atencion.ambulancia_id)}} ` +
+            `(${{mostrarEstado(estadoAmbulancias[atencion.ambulancia_id].estado)}})</dd></div>` +
+            `<div><dt>Recorrido:</dt><dd>` +
+            `${{mostrarMetros(atencion.distancia_ambulancia_emergencia_m)}} + ` +
+            `${{mostrarMetros(atencion.distancia_emergencia_establecimiento_m)}} = ` +
+            `${{mostrarMetros(atencion.distancia_total_m)}}; ` +
+            `penalización ${{mostrarMetros(atencion.penalizacion_establecimiento_m)}}; ` +
+            `costo ${{mostrarMetros(atencion.costo_seleccion)}}</dd></div>`;
+        }} else {{
+          detalleSeleccion = `<div><dt>Emergencia seleccionada:</dt>` +
+            `<dd>${{escapar(emergenciaFiltro)}} — sin asignación (` +
+            `${{escapar(estado.motivo_sin_asignar || "motivo_no_informado")}})</dd></div>`;
+        }}
+      }}
+      resultadoSimulacion.innerHTML = `<dl>
+        <div><dt>Tipo:</dt><dd>lógica por etapas, sin tiempos reales</dd></div>
+        <div><dt>Etapa:</dt><dd>${{estadoSimulacion.paso}} / ${{simulacion.total_pasos}} — ${{escapar(estadoSimulacion.nombre)}}</dd></div>
+        <div><dt>Atenciones:</dt><dd>${{simulacion.cantidad_atenciones}}</dd></div>
+        <div><dt>Completadas:</dt><dd>${{estadoSimulacion.cantidad_completadas}}</dd></div>
+        <div><dt>Sin asignar:</dt><dd>${{simulacion.cantidad_sin_asignar}}</dd></div>
+        <div><dt>Costo total:</dt><dd>${{mostrarMetros(simulacion.costo_total)}}</dd></div>
+        <div><dt>Distancia total:</dt><dd>${{mostrarMetros(simulacion.distancia_total)}}</dd></div>
+        <div><dt>Penalizaciones:</dt><dd>${{mostrarMetros(simulacion.penalizacion_total)}}</dd></div>
+        ${{detalleSeleccion}}
+      </dl>
+      <ul class="popup-list"><li><strong>Estado de emergencias</strong></li>${{estadosEmergencias}}</ul>
+      <ul class="popup-list"><li><strong>Estado de ambulancias</strong></li>${{estadosAmbulancias}}</ul>`;
     }}
 
-    selectorAsignacion.addEventListener("change", aplicarAsignacion);
+    function mostrarEvaluacion() {{
+      const contenedor = document.getElementById("resultado-evaluacion");
+      const evaluacion = datos.evaluacion;
+      if (!evaluacion || !evaluacion.escenarios.length) {{
+        contenedor.textContent = "No hay datos de evaluación disponibles.";
+        return;
+      }}
+      const filas = evaluacion.escenarios.map((metricas) => {{
+        const reduccion = Math.max(
+          0, Math.min(100, Number(metricas.porcentaje_reduccion) || 0)
+        );
+        const diferencias = metricas.diferencias_respecto_original.length;
+        return `<tr>
+          <td>${{escapar(metricas.etiqueta)}}</td>
+          <td>${{metricas.alternativas_conservadas}} / ${{metricas.alternativas_generadas}}</td>
+          <td>${{metricas.alternativas_evaluadas}}</td>
+          <td><span class="barra-reduccion"><span style="width:${{reduccion}}%"></span></span>${{reduccion.toFixed(2)}} %</td>
+          <td>${{metricas.emergencias_atendidas}}</td>
+          <td>${{metricas.emergencias_sin_asignar}}</td>
+          <td>${{metricas.ambulancias_utilizadas.map(escapar).join(", ")}}</td>
+          <td>${{metricas.establecimientos_seleccionados.map(escapar).join(", ")}}</td>
+          <td>${{mostrarMetros(metricas.costo_total)}}</td>
+          <td>${{mostrarMetros(metricas.distancia_total)}}</td>
+          <td>${{mostrarMetros(metricas.penalizacion_total)}}</td>
+          <td>${{diferencias ? `${{diferencias}} cambio(s)` : "sin diferencias"}}</td>
+        </tr>`;
+      }}).join("");
+      const nivelesConPerdida = evaluacion.niveles_con_perdida.length
+        ? evaluacion.niveles_con_perdida.join(", ")
+        : "ninguno";
+      contenedor.innerHTML = `<p>
+        Comparación dinámica del escenario original y los niveles 1 a 4.
+        Nivel recomendado: <strong>${{evaluacion.nivel_recomendado ?? "—"}}</strong>;
+        pérdida por heurística: <strong>${{evaluacion.perdida_por_heuristica ? "sí" : "no"}}</strong>;
+        niveles con pérdida: <strong>${{nivelesConPerdida}}</strong>;
+        mismos resultados: <strong>${{evaluacion.todos_mismos_resultados ? "sí" : "no"}}</strong>;
+        mismos costos: <strong>${{evaluacion.todos_mismos_costos ? "sí" : "no"}}</strong>.
+      </p>
+      <table class="tabla-evaluacion">
+        <thead><tr>
+          <th>Escenario</th>
+          <th>Conservadas / generadas</th>
+          <th>Evaluadas</th>
+          <th>Reducción</th>
+          <th>Atendidas</th>
+          <th>Sin asignar</th>
+          <th>Ambulancias</th>
+          <th>Destinos</th>
+          <th>Costo</th>
+          <th>Distancia</th>
+          <th>Penalizaciones</th>
+          <th>Diferencias</th>
+        </tr></thead>
+        <tbody>${{filas}}</tbody>
+      </table>`;
+    }}
+
+    selectorAsignacion.addEventListener("change", () => {{
+      selectorSimulacionEtapa.value = "0";
+      selectorSimulacionEmergencia.value = "";
+      aplicarAsignacion();
+    }});
+    selectorSimulacionEtapa.addEventListener("change", aplicarAsignacion);
+    selectorSimulacionEmergencia.addEventListener("change", aplicarAsignacion);
     aplicarAsignacion();
+    mostrarEvaluacion();
   </script>
 </body>
 </html>

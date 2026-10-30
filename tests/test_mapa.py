@@ -1,4 +1,7 @@
 import json
+import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +113,253 @@ class DatosMapaTest(unittest.TestCase):
         self.assertEqual([], comparacion["niveles_con_perdida"])
         self.assertEqual({}, comparacion["diferencias"])
 
+    def test_incluye_simulaciones_para_cada_asignacion(self) -> None:
+        self.assertEqual(
+            set(self.mapa["asignaciones"]), set(self.mapa["simulaciones"])
+        )
+        self.assertEqual(
+            [
+                (0, "asignada", "Asignada"),
+                (1, "en_camino", "En camino"),
+                (2, "en_atencion", "En atención"),
+                (3, "trasladando", "Trasladando"),
+                (4, "finalizada", "Finalizada"),
+            ],
+            [
+                (etapa["paso"], etapa["clave"], etapa["nombre"])
+                for etapa in self.mapa["etapas_simulacion"]
+            ],
+        )
+
+        for clave, simulacion in self.mapa["simulaciones"].items():
+            asignacion = self.mapa["asignaciones"][clave]
+            self.assertEqual(asignacion["etiqueta"], simulacion["etiqueta"])
+            self.assertEqual(4, simulacion["total_pasos"])
+            self.assertEqual(
+                len(asignacion["alternativas"]),
+                simulacion["cantidad_atenciones"],
+            )
+            self.assertAlmostEqual(
+                asignacion["costo_total"], simulacion["costo_total"]
+            )
+            self.assertEqual(
+                asignacion["emergencias_sin_asignar"],
+                simulacion["emergencias_sin_asignar"],
+            )
+            self.assertEqual(
+                asignacion["motivos_sin_asignar"],
+                simulacion["motivos_sin_asignar"],
+            )
+            self.assertEqual(
+                len(self.mapa["etapas_simulacion"]), len(simulacion["estados"])
+            )
+
+    def test_incluye_evaluacion_de_los_cinco_escenarios(self) -> None:
+        evaluacion = self.mapa["evaluacion"]
+        self.assertEqual(5, len(evaluacion["escenarios"]))
+        self.assertEqual(
+            ["original", "nivel 1", "nivel 2", "nivel 3", "nivel 4"],
+            [metricas["etiqueta"] for metricas in evaluacion["escenarios"]],
+        )
+        self.assertEqual(
+            [None, 1, 2, 3, 4],
+            [metricas["nivel"] for metricas in evaluacion["escenarios"]],
+        )
+        self.assertEqual(
+            [120, 30, 60, 100, 120],
+            [
+                metricas["alternativas_conservadas"]
+                for metricas in evaluacion["escenarios"]
+            ],
+        )
+        self.assertEqual(
+            [30, 15, 20, 25, 30],
+            [
+                metricas["alternativas_evaluadas"]
+                for metricas in evaluacion["escenarios"]
+            ],
+        )
+        self.assertEqual(
+            [0.0, 75.0, 50.0, 16.67, 0.0],
+            [
+                metricas["porcentaje_reduccion"]
+                for metricas in evaluacion["escenarios"]
+            ],
+        )
+
+        for metricas in evaluacion["escenarios"]:
+            clave = (
+                "original"
+                if metricas["nivel"] is None
+                else f"nivel-{metricas['nivel']}"
+            )
+            asignacion = self.mapa["asignaciones"][clave]
+            simulacion = self.mapa["simulaciones"][clave]
+            self.assertAlmostEqual(
+                asignacion["costo_total"], metricas["costo_total"]
+            )
+            self.assertAlmostEqual(
+                simulacion["costo_total"], metricas["costo_total"]
+            )
+            self.assertAlmostEqual(
+                simulacion["distancia_total"], metricas["distancia_total"]
+            )
+            self.assertAlmostEqual(
+                simulacion["penalizacion_total"],
+                metricas["penalizacion_total"],
+            )
+            self.assertEqual(
+                asignacion["emergencias_atendidas"],
+                [item["emergencia_id"] for item in metricas["asignaciones"]],
+            )
+            self.assertEqual(
+                asignacion["ambulancias_utilizadas"],
+                list(metricas["ambulancias_utilizadas"]),
+            )
+            self.assertEqual(
+                asignacion["establecimientos_seleccionados"],
+                list(metricas["establecimientos_seleccionados"]),
+            )
+            final = simulacion["estados"][-1]
+            for emergencia_id, estado in metricas[
+                "estados_finales_emergencias"
+            ].items():
+                self.assertEqual(
+                    final["emergencias"][emergencia_id]["estado"], estado
+                )
+            for ambulancia_id, estado in metricas[
+                "estados_finales_ambulancias"
+            ].items():
+                self.assertEqual(
+                    final["ambulancias"][ambulancia_id]["estado"], estado
+                )
+
+        self.assertEqual(1, evaluacion["nivel_recomendado"])
+        self.assertFalse(evaluacion["perdida_por_heuristica"])
+        self.assertEqual([], evaluacion["niveles_con_perdida"])
+        self.assertTrue(evaluacion["todos_mismos_resultados"])
+        self.assertTrue(evaluacion["todos_mismos_costos"])
+
+    def test_simulacion_conserva_tramos_costos_y_estados(self) -> None:
+        simulacion = self.mapa["simulaciones"]["nivel-1"]
+        asignacion = self.mapa["asignaciones"]["nivel-1"]
+
+        self.assertEqual(5, simulacion["cantidad_atenciones"])
+        self.assertEqual(5, simulacion["cantidad_completadas"])
+        self.assertEqual(0, simulacion["cantidad_sin_asignar"])
+        self.assertTrue(simulacion["es_completa"])
+        self.assertAlmostEqual(
+            27017.174000000003, simulacion["costo_total"]
+        )
+        self.assertAlmostEqual(
+            24017.174000000003, simulacion["distancia_total"]
+        )
+        self.assertAlmostEqual(3000.0, simulacion["penalizacion_total"])
+
+        for atencion in simulacion["atenciones"]:
+            alternativa = next(
+                alternativa
+                for alternativa in asignacion["alternativas"]
+                if alternativa["emergencia_id"] == atencion["emergencia_id"]
+            )
+            self.assertEqual(
+                alternativa["ambulancia_id"], atencion["ambulancia_id"]
+            )
+            self.assertEqual(
+                alternativa["establecimiento_id"],
+                atencion["establecimiento_id"],
+            )
+            self.assertAlmostEqual(
+                alternativa["distancia_ambulancia_emergencia_m"],
+                atencion["distancia_ambulancia_emergencia_m"],
+            )
+            self.assertAlmostEqual(
+                alternativa["distancia_emergencia_establecimiento_m"],
+                atencion["distancia_emergencia_establecimiento_m"],
+            )
+            self.assertAlmostEqual(
+                atencion["distancia_total_m"],
+                atencion["distancia_ambulancia_emergencia_m"]
+                + atencion["distancia_emergencia_establecimiento_m"],
+            )
+            self.assertAlmostEqual(
+                atencion["costo_seleccion"],
+                atencion["distancia_total_m"]
+                + atencion["penalizacion_establecimiento_m"],
+            )
+            self.assertIn(
+                atencion["ruta_ambulancia_emergencia"],
+                self.mapa["rutas_ambulancia_emergencia"],
+            )
+            self.assertIn(
+                atencion["ruta_emergencia_establecimiento"],
+                self.mapa["rutas_emergencia_establecimiento"],
+            )
+
+        self.assertEqual(
+            ["asignada", "en_camino", "en_atencion", "trasladando", "finalizada"],
+            [estado["etapa"] for estado in simulacion["estados"]],
+        )
+        self.assertEqual(
+            [0, 1, 2, 3, 4],
+            [estado["paso"] for estado in simulacion["estados"]],
+        )
+        for estado in simulacion["estados"]:
+            self.assertEqual(
+                len(asignacion["emergencias_atendidas"])
+                if estado["paso"] == 4
+                else 0,
+                estado["cantidad_completadas"],
+            )
+            for emergencia_id in asignacion["emergencias_atendidas"]:
+                self.assertIn(emergencia_id, estado["emergencias"])
+                self.assertIn(
+                    estado["emergencias"][emergencia_id]["ambulancia_id"],
+                    estado["ambulancias"],
+                )
+        final = simulacion["estados"][-1]
+        for emergencia_id in asignacion["emergencias_atendidas"]:
+            self.assertEqual(
+                "finalizada", final["emergencias"][emergencia_id]["estado"]
+            )
+            self.assertTrue(final["emergencias"][emergencia_id]["completada"])
+        self.assertEqual("disponible", final["ambulancias"]["A3"]["estado"])
+        self.assertIsNone(final["ambulancias"]["A3"]["emergencia_id"])
+
+    def test_simulacion_es_determinista_y_no_muta_la_asignacion(self) -> None:
+        with tempfile.TemporaryDirectory() as directorio:
+            datos = json.loads(
+                (RAIZ / "data" / "pergamino.json").read_text(encoding="utf-8")
+            )
+            primero = preparar_datos_mapa(
+                datos, RAIZ / "config" / "ambulancias.json"
+            )
+            segundo = preparar_datos_mapa(
+                datos, RAIZ / "config" / "ambulancias.json"
+            )
+            self.assertEqual(
+                primero["simulaciones"], segundo["simulaciones"]
+            )
+            self.assertEqual(
+                primero["asignaciones"], segundo["asignaciones"]
+            )
+            salida = Path(directorio) / "mapa.html"
+            exportar_mapa(
+                RAIZ / "data" / "pergamino.json",
+                RAIZ / "config" / "ambulancias.json",
+                salida,
+            )
+            exportado = json.loads(
+                re.search(
+                    r'<script id="datos-mapa" type="application/json">(.*?)</script>',
+                    salida.read_text(encoding="utf-8"),
+                    re.DOTALL,
+                ).group(1)
+            )
+        self.assertEqual(
+            primero["simulaciones"], exportado["simulaciones"]
+        )
+
     def test_deduplica_aristas_inversas_para_visualizar_calles(self) -> None:
         cantidad_original = 12237
 
@@ -180,6 +430,82 @@ class DatosMapaTest(unittest.TestCase):
         self.assertIn("Óptima dentro del conjunto", html)
         self.assertIn("Nivel recomendado", html)
         self.assertIn("Niveles con pérdida", html)
+
+    def test_exporta_controles_de_simulacion(self) -> None:
+        with tempfile.TemporaryDirectory() as directorio:
+            salida = Path(directorio) / "mapa.html"
+            exportar_mapa(
+                RAIZ / "data" / "pergamino.json",
+                RAIZ / "config" / "ambulancias.json",
+                salida,
+            )
+            html = salida.read_text(encoding="utf-8")
+
+        self.assertIn("Simulación — Etapa 8", html)
+        self.assertIn('id="simulacion-etapa"', html)
+        self.assertIn('id="simulacion-emergencia"', html)
+        self.assertIn('id="resultado-simulacion"', html)
+        self.assertIn("Etapa lógica", html)
+        self.assertIn("Todas las emergencias", html)
+        self.assertIn("datos.simulaciones", html)
+        self.assertIn("datos.etapas_simulacion", html)
+        self.assertIn("selectorSimulacionEtapa", html)
+        self.assertIn("selectorSimulacionEmergencia", html)
+        self.assertIn("aplicarAsignacion", html)
+        self.assertIn("estiloTramo", html)
+        self.assertIn("Emergencia seleccionada", html)
+        self.assertIn("Estado de emergencias", html)
+        self.assertIn("Estado de ambulancias", html)
+        self.assertIn("lógica por etapas, sin tiempos reales", html)
+        self.assertIn("Penalizaciones", html)
+
+    def test_exporta_panel_de_evaluacion(self) -> None:
+        with tempfile.TemporaryDirectory() as directorio:
+            salida = Path(directorio) / "mapa.html"
+            exportar_mapa(
+                RAIZ / "data" / "pergamino.json",
+                RAIZ / "config" / "ambulancias.json",
+                salida,
+            )
+            html = salida.read_text(encoding="utf-8")
+
+        self.assertIn("Evaluación comparativa — Etapa 9", html)
+        self.assertIn('id="resultado-evaluacion"', html)
+        self.assertIn("datos.evaluacion", html)
+        self.assertIn("mostrarEvaluacion", html)
+        self.assertIn("tabla-evaluacion", html)
+        self.assertIn("Conservadas / generadas", html)
+        self.assertIn("Reducción", html)
+        self.assertIn("Nivel recomendado", html)
+        self.assertIn("mismos resultados", html)
+        self.assertIn("mismos costos", html)
+        self.assertIn("barra-reduccion", html)
+
+    def test_javascript_generado_tiene_sintaxis_valida(self) -> None:
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node.js no está disponible para validar el JavaScript")
+
+        with tempfile.TemporaryDirectory() as directorio:
+            salida = Path(directorio) / "mapa.html"
+            exportar_mapa(
+                RAIZ / "data" / "pergamino.json",
+                RAIZ / "config" / "ambulancias.json",
+                salida,
+            )
+            html = salida.read_text(encoding="utf-8")
+            scripts = re.findall(r"<script>(.*?)</script>", html, re.DOTALL)
+            self.assertEqual(1, len(scripts))
+            script = Path(directorio) / "mapa.js"
+            script.write_text(scripts[0], encoding="utf-8")
+            resultado = subprocess.run(
+                [node, "--check", str(script)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+
+        self.assertEqual(0, resultado.returncode, resultado.stderr)
 
 
 if __name__ == "__main__":
