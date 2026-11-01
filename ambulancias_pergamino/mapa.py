@@ -9,9 +9,93 @@ from typing import Any
 
 from .ambulancias import cargar_ambulancias
 from .alternativas import construir_alternativas
+from .asignacion import comparar_niveles
 from .establecimientos import cargar_establecimientos
 from .emergencias import cargar_emergencias
+from .evaluacion import evaluar_escenarios
 from .grafo import Grafo
+from .heuristicas import reducir_alternativas
+from .simulacion import ETAPAS_SIMULACION, crear_simulacion
+
+
+def _datos_simulacion_mapa(
+    asignacion: Any,
+    resultado_alternativas: Any,
+    ambulancias: Any,
+    emergencias: Any,
+    establecimientos: Any,
+) -> dict[str, Any]:
+    simulacion = crear_simulacion(
+        asignacion,
+        resultado_alternativas,
+        ambulancias,
+        emergencias,
+        establecimientos,
+    )
+    resultados = []
+    for paso in range(len(ETAPAS_SIMULACION)):
+        if paso:
+            simulacion.avanzar()
+        resultados.append(simulacion.resultado())
+
+    inicial = resultados[0]
+    final = resultados[-1]
+    return {
+        "etiqueta": asignacion.etiqueta,
+        "total_pasos": final.total_pasos,
+        "costo_total": final.costo_total,
+        "distancia_total": final.distancia_total,
+        "penalizacion_total": final.penalizacion_total,
+        "cantidad_atenciones": final.cantidad_atenciones,
+        "cantidad_completadas": final.cantidad_completadas,
+        "cantidad_sin_asignar": final.cantidad_sin_asignar,
+        "es_completa": final.es_completa,
+        "atenciones": [
+            {
+                "emergencia_id": atencion.emergencia_id,
+                "ambulancia_id": atencion.ambulancia_id,
+                "base_id": atencion.base_id,
+                "establecimiento_id": atencion.establecimiento_id,
+                "distancia_ambulancia_emergencia_m": (
+                    atencion.distancia_ambulancia_emergencia_m
+                ),
+                "distancia_emergencia_establecimiento_m": (
+                    atencion.distancia_emergencia_establecimiento_m
+                ),
+                "distancia_total_m": atencion.distancia_total_m,
+                "penalizacion_establecimiento_m": (
+                    atencion.penalizacion_establecimiento_m
+                ),
+                "costo_seleccion": atencion.costo_seleccion,
+                "ruta_ambulancia_emergencia": (
+                    f"{atencion.ambulancia_id}|{atencion.emergencia_id}"
+                ),
+                "ruta_emergencia_establecimiento": (
+                    f"{atencion.emergencia_id}|{atencion.establecimiento_id}"
+                ),
+            }
+            for atencion in inicial.atenciones
+        ],
+        "emergencias_sin_asignar": list(final.emergencias_sin_asignar),
+        "motivos_sin_asignar": dict(final.motivos_sin_asignar),
+        "estados": [
+            {
+                "paso": resultado.paso,
+                "etapa": resultado.etapa,
+                "nombre": resultado.nombre_etapa,
+                "emergencias": {
+                    emergencia.emergencia_id: asdict(emergencia)
+                    for emergencia in resultado.emergencias
+                },
+                "ambulancias": {
+                    ambulancia.ambulancia_id: asdict(ambulancia)
+                    for ambulancia in resultado.ambulancias
+                },
+                "cantidad_completadas": resultado.cantidad_completadas,
+            }
+            for resultado in resultados
+        ],
+    }
 
 
 def preparar_datos_mapa(
@@ -27,6 +111,15 @@ def preparar_datos_mapa(
     emergencias = cargar_emergencias(configuracion_emergencias, grafo)
     resultado_alternativas = construir_alternativas(
         ambulancias, emergencias, establecimientos, grafo
+    )
+    reduccion = reducir_alternativas(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
+    )
+    comparacion_asignaciones = comparar_niveles(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
+    )
+    evaluacion = evaluar_escenarios(
+        resultado_alternativas, ambulancias, emergencias, establecimientos
     )
 
     tramos: list[dict[str, Any]] = []
@@ -59,6 +152,25 @@ def preparar_datos_mapa(
             "coordenadas": [list(reversed(grafo.nodos[nodo])) for nodo in camino],
         }
 
+    asignaciones = {
+        "original": comparacion_asignaciones.original,
+        **{
+            f"nivel-{resultado_nivel.parametros.nivel}": resultado_nivel
+            for resultado_nivel in comparacion_asignaciones.niveles
+            if resultado_nivel.parametros is not None
+        },
+    }
+    simulaciones = {
+        clave: _datos_simulacion_mapa(
+            asignacion,
+            resultado_alternativas,
+            ambulancias,
+            emergencias,
+            establecimientos,
+        )
+        for clave, asignacion in asignaciones.items()
+    }
+
     return {
         "datos_simulados": True,
         "tramos": tramos,
@@ -71,6 +183,47 @@ def preparar_datos_mapa(
         "alternativas": [
             asdict(alternativa) for alternativa in resultado_alternativas.alternativas
         ],
+        "reduccion": {
+            "parametros": asdict(reduccion.parametros),
+            "estadisticas": asdict(reduccion.estadisticas),
+            "orden_emergencias": [
+                asdict(item) for item in reduccion.orden_emergencias
+            ],
+            "selecciones": {
+                emergencia_id: asdict(seleccion)
+                for emergencia_id, seleccion in reduccion.selecciones.items()
+            },
+            "alternativas_reducidas": [
+                asdict(alternativa)
+                for alternativa in reduccion.alternativas_reducidas
+            ],
+        },
+        "asignaciones": {
+            clave: asdict(asignacion)
+            for clave, asignacion in asignaciones.items()
+        },
+        "simulaciones": simulaciones,
+        "etapas_simulacion": [
+            asdict(etapa) for etapa in ETAPAS_SIMULACION
+        ],
+        "evaluacion": {
+            "escenarios": [
+                asdict(metricas) for metricas in evaluacion.escenarios
+            ],
+            "nivel_recomendado": evaluacion.nivel_recomendado,
+            "perdida_por_heuristica": evaluacion.perdida_por_heuristica,
+            "niveles_con_perdida": list(evaluacion.niveles_con_perdida),
+            "todos_mismos_resultados": evaluacion.todos_mismos_resultados,
+            "todos_mismos_costos": evaluacion.todos_mismos_costos,
+        },
+        "comparacion_asignaciones": {
+            "nivel_recomendado": comparacion_asignaciones.nivel_recomendado,
+            "perdida_por_heuristica": (
+                comparacion_asignaciones.perdida_por_heuristica
+            ),
+            "niveles_con_perdida": comparacion_asignaciones.niveles_con_perdida,
+            "diferencias": comparacion_asignaciones.diferencias,
+        },
         "rutas_ambulancia_emergencia": {
             clave: {
                 "distancia_metros": ruta.distancia_m,
@@ -125,66 +278,80 @@ def _plantilla_html(datos_json: str) -> str:
     :root {{
       color-scheme: light;
       --surface: #ffffff;
-      --surface-muted: #f4f7f6;
-      --text: #17211d;
-      --text-muted: #52615b;
-      --border: #cbd6d1;
-      --prioritario: #b42318;
-      --destino: #075c9e;
-      --solo-base: #5c6762;
-      --route: #006bd6;
-      --route-first: #7b2cbf;
-      --route-second: #00875a;
-      --gravedad-alta: #8b1e1e;
-      --gravedad-media: #c2410c;
-      --gravedad-baja: #d6a800;
+      --surface-muted: #eef3f8;
+      --text: #172033;
+      --text-muted: #607087;
+      --border: #d9e2ec;
+      --border-strong: #c5d2e0;
+      --primary: #1769aa;
+      --primary-dark: #124e7f;
+      --prioritario: #c2413b;
+      --destino: #1769aa;
+      --solo-base: #64748b;
+      --route: #1976d2;
+      --route-first: #7c3aed;
+      --route-second: #008a63;
+      --gravedad-alta: #b42318;
+      --gravedad-media: #d97706;
+      --gravedad-baja: #eab308;
+      --shadow: 0 0.4rem 1.4rem #1e3a5f14;
     }}
     * {{ box-sizing: border-box; }}
-    html, body {{ height: 100%; margin: 0; }}
+    html, body {{ min-height: 100%; margin: 0; }}
     body {{
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
       background: var(--surface-muted);
       color: var(--text);
-      font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      font: 15px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }}
     header {{
       display: grid;
-      grid-template-columns: minmax(14rem, 1fr) minmax(28rem, 2fr);
+      grid-template-columns: minmax(14rem, 1fr) minmax(30rem, 2fr);
       align-items: end;
       gap: 1rem;
-      padding: 0.75rem 1rem;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      padding: 0.8rem 1.25rem;
+      background: #102a43;
+      border-bottom: 1px solid #0e426b;
+      color: #fff;
       z-index: 1000;
+      box-shadow: 0 0.25rem 0.8rem #102a4333;
     }}
-    h1 {{ margin: 0; font-size: 1.25rem; line-height: 1.2; }}
-    .subtitle {{ margin: 0.25rem 0 0; color: var(--text-muted); font-size: 0.875rem; }}
+    h1 {{ margin: 0; font-size: clamp(1.25rem, 2vw, 1.65rem); line-height: 1.2; letter-spacing: -0.02em; }}
+    .subtitle {{ margin: 0.4rem 0 0; color: #d9efff; font-size: 0.875rem; }}
     .badge {{
       display: inline-block;
       margin-left: 0.375rem;
-      padding: 0.125rem 0.375rem;
-      border: 1px solid #b36b50;
-      color: #793016;
+      padding: 0.2rem 0.5rem;
+      border: 1px solid #b7e2ff88;
+      border-radius: 999px;
+      background: #ffffff1c;
+      color: #fff;
       font-size: 0.75rem;
       font-weight: 700;
       letter-spacing: 0.02em;
       text-transform: uppercase;
     }}
     .controls {{ display: grid; grid-template-columns: 1fr 1fr minmax(11rem, auto); gap: 0.75rem; }}
+    .controls, .field, section, .workspace, .control-panel {{ min-width: 0; }}
     .field {{ display: grid; gap: 0.25rem; }}
     label {{ font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }}
+    header label {{ color: #d9efff; }}
     select {{
       width: 100%;
       min-height: 2.5rem;
-      padding: 0.375rem 0.5rem;
+      padding: 0.45rem 0.65rem;
       border: 1px solid var(--border);
-      border-radius: 0.25rem;
+      border-radius: 0.5rem;
       background: var(--surface);
       color: var(--text);
       font: inherit;
+      box-shadow: 0 1px 2px #1e3a5f0d;
     }}
+    select:hover {{ border-color: #9eb4c9; }}
     select:focus-visible {{ outline: 3px solid #78b9ff; outline-offset: 1px; }}
     #resultado {{
       align-self: end;
@@ -192,32 +359,226 @@ def _plantilla_html(datos_json: str) -> str:
       display: flex;
       align-items: center;
       padding: 0.375rem 0.75rem;
-      border-left: 4px solid var(--route);
-      background: #eaf4ff;
+      border: 1px solid #b7e2ff88;
+      border-left: 4px solid #8bd1ff;
+      border-radius: 0.5rem;
+      background: #ffffff1c;
+      color: #fff;
       font-weight: 700;
     }}
+    section {{
+      flex: 0 0 auto;
+      margin: 0 0 1rem;
+      padding: 0.8rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }}
+    .workspace {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(22rem, 27rem);
+      grid-template-areas: "map controls";
+      gap: 0.9rem;
+      min-height: 0;
+      height: clamp(36rem, 72vh, 52rem);
+      flex: 0 0 auto;
+      padding: 0.9rem;
+    }}
+    .control-panel {{
+      grid-area: controls;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0.2rem 0.25rem 0.2rem 0;
+    }}
+    .control-panel section:last-child {{ margin-bottom: 0; }}
     .alternative-controls {{
       display: grid;
       grid-template-columns: repeat(3, minmax(10rem, 1fr));
       gap: 0.75rem;
-      padding: 0.625rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
       z-index: 900;
+    }}
+    .control-panel .alternative-controls {{
+      grid-template-columns: minmax(0, 1fr);
+    }}
+    section h2 {{ color: var(--primary-dark); letter-spacing: -0.01em; }}
+    .control-panel section {{
+      margin-bottom: 0.75rem;
+      padding: 0.85rem;
+      border-radius: 0.6rem;
+      box-shadow: 0 0.2rem 0.7rem #1e3a5f12;
+    }}
+    .control-panel section h2 {{
+      margin: 0 0 0.75rem;
+      padding-bottom: 0.55rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.92rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }}
     .alternative-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
     #resultado-alternativa {{
       grid-column: 1 / -1;
+      min-width: 0;
       min-height: 2.5rem;
       padding: 0.5rem 0.75rem;
+      border: 1px solid #ddd0ff;
       border-left: 4px solid var(--route-first);
-      background: #f5effb;
+      border-radius: 0.5rem;
+      background: #faf8ff;
     }}
     #resultado-alternativa dl {{ display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0; }}
     #resultado-alternativa div {{ display: flex; gap: 0.25rem; }}
     #resultado-alternativa dt {{ font-weight: 700; }}
     #resultado-alternativa dd {{ margin: 0; }}
-    #mapa {{ width: 100%; min-height: 28rem; }}
+    .heuristic-controls {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(10rem, 1fr));
+      gap: 0.75rem;
+      z-index: 850;
+    }}
+    .control-panel .heuristic-controls {{
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .heuristic-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-heuristica {{
+      grid-column: 1 / -1;
+      min-height: 2.5rem;
+      padding: 0.65rem 0.75rem;
+      border: 1px solid #c7eadc;
+      border-left: 4px solid var(--route-second);
+      border-radius: 0.5rem;
+      background: #f2fcf7;
+    }}
+    .assignment-controls {{
+      display: grid;
+      grid-template-columns: minmax(12rem, 18rem) 1fr;
+      gap: 0.75rem;
+      z-index: 825;
+    }}
+    .control-panel .assignment-controls {{
+      grid-template-columns: minmax(0, 1fr);
+    }}
+    .assignment-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-asignacion {{
+      grid-column: 1 / -1;
+      max-height: 14rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #c7dced;
+      border-left: 4px solid var(--route);
+      border-radius: 0.5rem;
+      background: #f7fbff;
+    }}
+    #resultado-asignacion dl {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem;
+      margin: 0 0 0.5rem;
+    }}
+    #resultado-asignacion div {{ display: flex; gap: 0.25rem; }}
+    #resultado-asignacion dt {{ font-weight: 700; }}
+    #resultado-asignacion dd {{ margin: 0; }}
+    .simulation-controls {{
+      display: grid;
+      grid-template-columns: minmax(10rem, 14rem) minmax(12rem, 18rem) 1fr;
+      gap: 0.75rem;
+      z-index: 800;
+    }}
+    .control-panel .simulation-controls {{
+      grid-template-columns: minmax(0, 1fr);
+    }}
+    .simulation-controls h2 {{ grid-column: 1 / -1; margin: 0; font-size: 1rem; }}
+    #resultado-simulacion {{
+      grid-column: 1 / -1;
+      max-height: 16rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #c7eadc;
+      border-left: 4px solid var(--route-second);
+      border-radius: 0.5rem;
+      background: #f2fcf7;
+    }}
+    #resultado-simulacion dl {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem;
+      margin: 0 0 0.5rem;
+    }}
+    #resultado-simulacion div {{ display: flex; gap: 0.25rem; }}
+    #resultado-simulacion dt {{ font-weight: 700; }}
+    #resultado-simulacion dd {{ margin: 0; }}
+    .evaluation-controls {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      z-index: 800;
+    }}
+    .evaluation-controls h2 {{ margin: 0; font-size: 1rem; }}
+    #resultado-evaluacion {{
+      max-height: 18rem;
+      overflow: auto;
+      min-height: 2.5rem;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #f0c9c6;
+      border-left: 4px solid var(--prioritario);
+      border-radius: 0.5rem;
+      background: #fff8f7;
+    }}
+    #resultado-evaluacion p {{ margin: 0 0 0.5rem; }}
+    .tabla-evaluacion {{
+      width: 100%;
+      min-width: 58rem;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+    }}
+    .tabla-evaluacion th,
+    .tabla-evaluacion td {{
+      padding: 0.25rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      text-align: right;
+      white-space: nowrap;
+    }}
+    .tabla-evaluacion th:first-child,
+    .tabla-evaluacion td:first-child {{ text-align: left; }}
+    .tabla-evaluacion thead th {{
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+      font-weight: 700;
+    }}
+    .barra-reduccion {{
+      display: inline-block;
+      width: 4rem;
+      height: 0.5rem;
+      margin-right: 0.375rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e3e8e5;
+      vertical-align: middle;
+    }}
+    .barra-reduccion span {{
+      display: block;
+      height: 100%;
+      background: var(--route-second);
+    }}
+    #mapa {{
+      grid-area: map;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 0.75rem;
+      box-shadow: var(--shadow);
+    }}
+    .evaluation-controls {{
+      margin: 0 0.9rem 0.9rem;
+      border-radius: 0.6rem;
+    }}
     .base-icon {{
       display: grid;
       place-items: center;
@@ -256,14 +617,19 @@ def _plantilla_html(datos_json: str) -> str:
     .popup-list li + li {{ margin-top: 0.1875rem; }}
     .leaflet-popup-content {{ min-width: 14rem; }}
     .leyenda {{
-      padding: 0.625rem 0.75rem;
+      max-height: min(32rem, calc(100vh - 2rem));
+      overflow: auto;
+      padding: 0.75rem 0.875rem;
       border: 1px solid var(--border);
-      background: #fffffff2;
-      box-shadow: 0 1px 4px #0003;
+      border-radius: 0.625rem;
+      background: #fffffff5;
+      box-shadow: 0 0.3rem 1rem #1e3a5f26;
       color: var(--text);
       line-height: 1.5;
+      backdrop-filter: blur(6px);
     }}
-    .leyenda strong {{ display: block; margin-bottom: 0.25rem; }}
+    .leyenda strong {{ display: block; margin: 0.35rem 0 0.25rem; color: var(--primary-dark); }}
+    .leyenda strong:first-child {{ margin-top: 0; }}
     .leyenda-item {{ display: flex; align-items: center; gap: 0.5rem; }}
     .leyenda-muestra {{
       width: 0.875rem;
@@ -285,16 +651,64 @@ def _plantilla_html(datos_json: str) -> str:
     .leyenda-linea {{ width: 1.5rem; height: 0; border-top: 4px solid; }}
     .leyenda-linea.tramo-inicial {{ border-color: var(--route-first); }}
     .leyenda-linea.tramo-destino {{ border-color: var(--route-second); }}
+    .leyenda-muestra.ambulancia-conservada {{ background: var(--route-first); }}
+    .leyenda-muestra.ambulancia-descartada {{ background: #8a8f8c; opacity: 0.45; }}
+    .leyenda-muestra.establecimiento-conservado {{ background: var(--destino); }}
+    .leyenda-muestra.establecimiento-excluido {{ background: #8a8f8c; opacity: 0.45; }}
+    .leyenda-muestra.asignacion-atendida {{ background: var(--route-second); }}
+    .leyenda-muestra.asignacion-sin-asignar {{ background: #8a8f8c; opacity: 0.45; }}
+    @media (max-width: 980px) {{
+      header {{
+        grid-template-columns: 1fr;
+        align-items: stretch;
+        gap: 0.75rem;
+      }}
+      .controls {{ grid-template-columns: 1fr 1fr minmax(12rem, 1fr); }}
+      .workspace {{
+        grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+      }}
+    }}
     @media (max-width: 760px) {{
       header {{ grid-template-columns: 1fr; align-items: stretch; }}
       .controls {{ grid-template-columns: 1fr 1fr; }}
       #resultado {{ grid-column: 1 / -1; }}
+      .workspace {{
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        padding: 0.75rem;
+      }}
+      #mapa {{
+        order: 1;
+        height: min(58vh, 32rem);
+        min-height: 22rem;
+        flex-basis: auto;
+      }}
+      .control-panel {{
+        order: 2;
+        overflow: visible;
+        padding-right: 0;
+      }}
+      .evaluation-controls {{ margin: 0 0.75rem 0.75rem; }}
       .alternative-controls {{ grid-template-columns: 1fr; }}
       .alternative-controls h2, #resultado-alternativa {{ grid-column: auto; }}
+      .heuristic-controls {{ grid-template-columns: 1fr; }}
+      .heuristic-controls h2, #resultado-heuristica {{ grid-column: auto; }}
+      .assignment-controls {{ grid-template-columns: 1fr; }}
+      .assignment-controls h2, #resultado-asignacion {{ grid-column: auto; }}
+      .simulation-controls {{ grid-template-columns: 1fr; }}
+      .simulation-controls h2, #resultado-simulacion {{ grid-column: auto; }}
     }}
     @media (max-width: 480px) {{
+      header {{ padding: 0.8rem; }}
+      h1 {{ font-size: 1.2rem; }}
+      .subtitle {{ font-size: 0.8rem; }}
       .controls {{ grid-template-columns: 1fr; }}
       #resultado {{ grid-column: auto; }}
+      .workspace {{ padding: 0.5rem; gap: 0.6rem; }}
+      #mapa {{ height: 58vh; min-height: 20rem; }}
+      .control-panel section {{ padding: 0.7rem; }}
+      .evaluation-controls {{ margin: 0 0.5rem 0.5rem; }}
     }}
   </style>
 </head>
@@ -316,14 +730,39 @@ def _plantilla_html(datos_json: str) -> str:
       <div id="resultado" role="status" aria-live="polite"></div>
     </div>
   </header>
-  <section class="alternative-controls" aria-labelledby="titulo-alternativas">
+  <div class="workspace">
+    <aside class="control-panel" aria-label="Controles de análisis">
+      <section class="alternative-controls" aria-labelledby="titulo-alternativas">
     <h2 id="titulo-alternativas">Visor manual de alternativas</h2>
     <div class="field"><label for="alternativa-ambulancia">Ambulancia</label><select id="alternativa-ambulancia"></select></div>
     <div class="field"><label for="alternativa-emergencia">Emergencia</label><select id="alternativa-emergencia"></select></div>
     <div class="field"><label for="alternativa-establecimiento">Establecimiento</label><select id="alternativa-establecimiento"></select></div>
     <div id="resultado-alternativa" role="status" aria-live="polite">Elegí los tres elementos para inspeccionar una alternativa.</div>
+      </section>
+      <section class="heuristic-controls" aria-labelledby="titulo-heuristicas">
+    <h2 id="titulo-heuristicas">Reducción de candidatos — Etapa 6</h2>
+    <div class="field"><label for="heuristica-emergencia">Emergencia</label><select id="heuristica-emergencia"></select></div>
+    <div class="field"><label for="heuristica-alternativa">Alternativa reducida</label><select id="heuristica-alternativa"></select></div>
+    <div id="resultado-heuristica" role="status" aria-live="polite">Elegí una emergencia para ver los candidatos conservados.</div>
+      </section>
+      <section class="assignment-controls" aria-labelledby="titulo-asignacion">
+    <h2 id="titulo-asignacion">Asignación global — Etapa 7</h2>
+    <div class="field"><label for="asignacion-conjunto">Conjunto de alternativas</label><select id="asignacion-conjunto"></select></div>
+    <div id="resultado-asignacion" role="status" aria-live="polite">Elegí un conjunto para ver la asignación global.</div>
+      </section>
+      <section class="simulation-controls" aria-labelledby="titulo-simulacion">
+    <h2 id="titulo-simulacion">Simulación — Etapa 8</h2>
+    <div class="field"><label for="simulacion-etapa">Etapa lógica</label><select id="simulacion-etapa"></select></div>
+    <div class="field"><label for="simulacion-emergencia">Emergencia</label><select id="simulacion-emergencia"></select></div>
+    <div id="resultado-simulacion" role="status" aria-live="polite">Elegí un conjunto de asignación para ver la simulación.</div>
+      </section>
+    </aside>
+    <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
+  </div>
+  <section class="evaluation-controls" aria-labelledby="titulo-evaluacion">
+    <h2 id="titulo-evaluacion">Evaluación comparativa — Etapa 9</h2>
+    <div id="resultado-evaluacion" role="status" aria-live="polite">Cargando la comparación de escenarios…</div>
   </section>
-  <main id="mapa" aria-label="Mapa vial de Pergamino"></main>
 
   <script id="datos-mapa" type="application/json">{datos_json}</script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -355,6 +794,11 @@ def _plantilla_html(datos_json: str) -> str:
     const establecimientosPorBase = Object.fromEntries(
       datos.establecimientos.map((establecimiento) => [establecimiento.base_id, establecimiento])
     );
+    const establecimientosPorId = Object.fromEntries(
+      datos.establecimientos.map((establecimiento) => [establecimiento.id, establecimiento])
+    );
+    const marcadoresBase = {{}};
+    const marcadoresEmergencia = {{}};
 
     datos.bases.forEach((base) => {{
       const ambulancia = ambulanciasPorBase[base.id];
@@ -384,9 +828,9 @@ def _plantilla_html(datos_json: str) -> str:
           <li><strong>Recibe pacientes:</strong> ${{recibePacientes}}</li>
           ${{detallesDestino}}
         </ul>`;
-      L.marker([base.latitud, base.longitud], {{ icon: icono, title: base.nombre }})
-        .bindPopup(contenido)
-        .addTo(mapa);
+      marcadoresBase[base.id] = L.marker(
+        [base.latitud, base.longitud], {{ icon: icono, title: base.nombre }}
+      ).bindPopup(contenido).addTo(mapa);
     }});
 
     const descripcionGravedad = {{
@@ -417,10 +861,12 @@ def _plantilla_html(datos_json: str) -> str:
           <li><strong>Distancia al nodo:</strong> ${{emergencia.distancia_al_nodo_m.toLocaleString("es-AR")}} m</li>
           <li><strong>Datos simulados:</strong> ${{emergencia.datos_simulados ? "Sí" : "No"}}</li>
         </ul>`;
-      L.marker([emergencia.latitud, emergencia.longitud], {{
-        icon: icono,
-        title: `Emergencia ${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`
-      }}).bindPopup(contenido).addTo(mapa);
+      marcadoresEmergencia[emergencia.id] = L.marker(
+        [emergencia.latitud, emergencia.longitud], {{
+          icon: icono,
+          title: `Emergencia ${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`
+        }}
+      ).bindPopup(contenido).addTo(mapa);
     }});
 
     const leyenda = L.control({{ position: "bottomleft" }});
@@ -437,7 +883,17 @@ def _plantilla_html(datos_json: str) -> str:
         <span class="leyenda-item"><i class="leyenda-muestra emergencia gravedad-1"></i>Gravedad baja (1)</span>
         <strong>Alternativa manual</strong>
         <span class="leyenda-item"><i class="leyenda-linea tramo-inicial"></i>Tramo ambulancia → emergencia</span>
-        <span class="leyenda-item"><i class="leyenda-linea tramo-destino"></i>Tramo emergencia → establecimiento</span>`;
+        <span class="leyenda-item"><i class="leyenda-linea tramo-destino"></i>Tramo emergencia → establecimiento</span>
+        <strong>Reducción de candidatos</strong>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-conservada"></i>Ambulancia conservada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-descartada"></i>Ambulancia descartada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-conservado"></i>Establecimiento conservado</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-excluido"></i>Establecimiento excluido</span>
+        <strong>Asignación global</strong>
+        <span class="leyenda-item"><i class="leyenda-muestra asignacion-atendida"></i>Emergencia atendida</span>
+        <span class="leyenda-item"><i class="leyenda-muestra asignacion-sin-asignar"></i>Emergencia sin asignar</span>
+        <span class="leyenda-item"><i class="leyenda-muestra ambulancia-conservada"></i>Ambulancia utilizada</span>
+        <span class="leyenda-item"><i class="leyenda-muestra establecimiento-conservado"></i>Establecimiento elegido</span>`;
       return contenedor;
     }};
     leyenda.addTo(mapa);
@@ -495,14 +951,37 @@ def _plantilla_html(datos_json: str) -> str:
     const alternativasPorClave = Object.fromEntries(datos.alternativas.map((a) => [
       `${{a.ambulancia_id}}|${{a.emergencia_id}}|${{a.establecimiento_id}}`, a
     ]));
-    let capaHastaEmergencia = null;
-    let capaHastaEstablecimiento = null;
     const mostrarMetros = (valor) => valor === null
       ? "Sin ruta"
       : `${{Math.round(valor).toLocaleString("es-AR")}} m`;
+    function crearDibujadorTramos() {{
+      let capaInicial = null;
+      let capaDestino = null;
+      function limpiar() {{
+        if (capaInicial) {{ mapa.removeLayer(capaInicial); capaInicial = null; }}
+        if (capaDestino) {{ mapa.removeLayer(capaDestino); capaDestino = null; }}
+      }}
+      function dibujar(ambulanciaId, emergenciaId, establecimientoId) {{
+        limpiar();
+        const rutaInicial = datos.rutas_ambulancia_emergencia[`${{ambulanciaId}}|${{emergenciaId}}`];
+        const rutaDestino = datos.rutas_emergencia_establecimiento[`${{emergenciaId}}|${{establecimientoId}}`];
+        const capas = [];
+        if (rutaInicial && rutaInicial.coordenadas.length) {{
+          capaInicial = L.polyline(rutaInicial.coordenadas, {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}).addTo(mapa);
+          capas.push(capaInicial);
+        }}
+        if (rutaDestino && rutaDestino.coordenadas.length) {{
+          capaDestino = L.polyline(rutaDestino.coordenadas, {{ color: "#00875a", weight: 5, opacity: 0.92 }}).addTo(mapa);
+          capas.push(capaDestino);
+        }}
+        if (capas.length) mapa.fitBounds(L.featureGroup(capas).getBounds(), {{ padding: [36, 36], maxZoom: 16 }});
+        return capas;
+      }}
+      return {{ limpiar, dibujar }};
+    }}
+    const dibujadorManual = crearDibujadorTramos();
     function dibujarAlternativa() {{
-      if (capaHastaEmergencia) {{ mapa.removeLayer(capaHastaEmergencia); capaHastaEmergencia = null; }}
-      if (capaHastaEstablecimiento) {{ mapa.removeLayer(capaHastaEstablecimiento); capaHastaEstablecimiento = null; }}
+      dibujadorManual.limpiar();
       const ambulanciaId = selectorAmbulancia.value;
       const emergenciaId = selectorEmergencia.value;
       const establecimientoId = selectorEstablecimiento.value;
@@ -511,18 +990,7 @@ def _plantilla_html(datos_json: str) -> str:
         return;
       }}
       const alternativa = alternativasPorClave[`${{ambulanciaId}}|${{emergenciaId}}|${{establecimientoId}}`];
-      const rutaInicial = datos.rutas_ambulancia_emergencia[`${{ambulanciaId}}|${{emergenciaId}}`];
-      const rutaDestino = datos.rutas_emergencia_establecimiento[`${{emergenciaId}}|${{establecimientoId}}`];
-      const capas = [];
-      if (rutaInicial.coordenadas.length) {{
-        capaHastaEmergencia = L.polyline(rutaInicial.coordenadas, {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}).addTo(mapa);
-        capas.push(capaHastaEmergencia);
-      }}
-      if (rutaDestino.coordenadas.length) {{
-        capaHastaEstablecimiento = L.polyline(rutaDestino.coordenadas, {{ color: "#00875a", weight: 5, opacity: 0.92 }}).addTo(mapa);
-        capas.push(capaHastaEstablecimiento);
-      }}
-      if (capas.length) mapa.fitBounds(L.featureGroup(capas).getBounds(), {{ padding: [36, 36], maxZoom: 16 }});
+      dibujadorManual.dibujar(ambulanciaId, emergenciaId, establecimientoId);
       const motivos = alternativa.motivos_descarte.length
         ? alternativa.motivos_descarte.map(escapar).join(", ")
         : "Ninguno";
@@ -539,6 +1007,441 @@ def _plantilla_html(datos_json: str) -> str:
     selectorAmbulancia.addEventListener("change", dibujarAlternativa);
     selectorEmergencia.addEventListener("change", dibujarAlternativa);
     selectorEstablecimiento.addEventListener("change", dibujarAlternativa);
+
+    const selectorEmergenciaHeuristica = document.getElementById("heuristica-emergencia");
+    const selectorAlternativaHeuristica = document.getElementById("heuristica-alternativa");
+    const resultadoHeuristica = document.getElementById("resultado-heuristica");
+    const capaCandidatosEstablecimientos = L.layerGroup().addTo(mapa);
+    const dibujadorHeuristico = crearDibujadorTramos();
+    const alternativasReducidasPorEmergencia = {{}};
+    datos.reduccion.alternativas_reducidas.forEach((alternativa) => {{
+      if (!alternativasReducidasPorEmergencia[alternativa.emergencia_id]) {{
+        alternativasReducidasPorEmergencia[alternativa.emergencia_id] = [];
+      }}
+      alternativasReducidasPorEmergencia[alternativa.emergencia_id].push(alternativa);
+    }});
+    const opcionEmergenciaHeuristica = new Option("Seleccionar emergencia…", "", true, true);
+    opcionEmergenciaHeuristica.disabled = true;
+    selectorEmergenciaHeuristica.add(opcionEmergenciaHeuristica);
+    datos.emergencias.forEach((emergencia) => {{
+      selectorEmergenciaHeuristica.add(new Option(
+        `${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`, emergencia.id
+      ));
+    }});
+    function reiniciarAlternativasHeuristicas() {{
+      selectorAlternativaHeuristica.innerHTML = "";
+      const inicial = new Option("Seleccionar alternativa…", "", true, true);
+      inicial.disabled = true;
+      selectorAlternativaHeuristica.add(inicial);
+    }}
+    function limpiarCapasHeuristicas() {{
+      dibujadorHeuristico.limpiar();
+      capaCandidatosEstablecimientos.clearLayers();
+    }}
+    function limpiarHeuristica() {{
+      limpiarCapasHeuristicas();
+      limpiarAsignacion();
+      reiniciarAsignacionUI();
+      Object.values(marcadoresBase).forEach((marcador) => marcador.setOpacity(1));
+      Object.values(marcadoresEmergencia).forEach((marcador) => {{
+        marcador.setOpacity(1);
+        marcador.setZIndexOffset(0);
+      }});
+      reiniciarAlternativasHeuristicas();
+    }}
+    function dibujarAlternativaHeuristica() {{
+      const clave = selectorAlternativaHeuristica.value;
+      if (!clave) {{
+        dibujadorHeuristico.limpiar();
+        return;
+      }}
+      const [ambulanciaId, emergenciaId, establecimientoId] = clave.split("|");
+      dibujadorHeuristico.dibujar(ambulanciaId, emergenciaId, establecimientoId);
+    }}
+    function aplicarHeuristica() {{
+      limpiarHeuristica();
+      const emergenciaId = selectorEmergenciaHeuristica.value;
+      if (!emergenciaId) {{
+        resultadoHeuristica.textContent = "Elegí una emergencia para ver los candidatos conservados.";
+        return;
+      }}
+      const seleccion = datos.reduccion.selecciones[emergenciaId];
+      const conservadas = new Set(
+        seleccion.ambulancias.filter((candidato) => candidato.conservada)
+          .map((candidato) => candidato.ambulancia_id)
+      );
+      datos.ambulancias.forEach((ambulancia) => {{
+        const marcador = marcadoresBase[ambulancia.base_id];
+        if (marcador) marcador.setOpacity(conservadas.has(ambulancia.id) ? 1 : 0.28);
+      }});
+      const marcadorEmergencia = marcadoresEmergencia[emergenciaId];
+      if (marcadorEmergencia) marcadorEmergencia.setZIndexOffset(1000);
+      seleccion.establecimientos.forEach((candidato) => {{
+        const establecimiento = establecimientosPorId[candidato.establecimiento_id];
+        if (!establecimiento) return;
+        L.circleMarker([establecimiento.latitud, establecimiento.longitud], {{
+          radius: candidato.conservado ? 19 : 12,
+          color: candidato.conservado ? "#075c9e" : "#7f8783",
+          weight: candidato.conservado ? 4 : 2,
+          opacity: candidato.conservado ? 0.95 : 0.4,
+          fillColor: candidato.conservado ? "#075c9e" : "#7f8783",
+          fillOpacity: candidato.conservado ? 0.16 : 0.04,
+          interactive: false
+        }}).addTo(capaCandidatosEstablecimientos);
+      }});
+      const alternativas = alternativasReducidasPorEmergencia[emergenciaId] || [];
+      alternativas.forEach((alternativa) => {{
+        const clave = `${{alternativa.ambulancia_id}}|${{alternativa.emergencia_id}}|${{alternativa.establecimiento_id}}`;
+        const etiqueta = `${{alternativa.ambulancia_id}} → ${{alternativa.establecimiento_id}} (${{mostrarMetros(alternativa.costo_seleccion)}})`;
+        selectorAlternativaHeuristica.add(new Option(etiqueta, clave));
+      }});
+      const factiblesAntes = datos.alternativas.filter(
+        (alternativa) => alternativa.emergencia_id === emergenciaId && alternativa.es_factible
+      ).length;
+      const conservadasCantidad = seleccion.ambulancias.filter((candidato) => candidato.conservada).length;
+      const conservadosCantidad = seleccion.establecimientos.filter((candidato) => candidato.conservado).length;
+      resultadoHeuristica.textContent =
+        `${{emergenciaId}} — ambulancias: ${{seleccion.ambulancias.length}} → ${{conservadasCantidad}}; ` +
+        `establecimientos: ${{seleccion.establecimientos.length}} → ${{conservadosCantidad}}; ` +
+        `alternativas factibles: ${{factiblesAntes}} → ${{alternativas.length}}`;
+      if (alternativas.length) {{
+        selectorAlternativaHeuristica.selectedIndex = 1;
+        dibujarAlternativaHeuristica();
+      }} else {{
+        resultadoHeuristica.textContent += " — sin alternativas reducidas";
+      }}
+    }}
+    selectorEmergenciaHeuristica.addEventListener("change", aplicarHeuristica);
+    selectorAlternativaHeuristica.addEventListener("change", dibujarAlternativaHeuristica);
+    reiniciarAlternativasHeuristicas();
+
+    const selectorAsignacion = document.getElementById("asignacion-conjunto");
+    const selectorSimulacionEtapa = document.getElementById("simulacion-etapa");
+    const selectorSimulacionEmergencia = document.getElementById("simulacion-emergencia");
+    const resultadoAsignacion = document.getElementById("resultado-asignacion");
+    const resultadoSimulacion = document.getElementById("resultado-simulacion");
+    const capaAsignacionRutas = L.layerGroup().addTo(mapa);
+    const capaAsignacionEstablecimientos = L.layerGroup().addTo(mapa);
+    const opcionAsignacion = new Option("Seleccionar conjunto…", "", true, true);
+    opcionAsignacion.disabled = true;
+    selectorAsignacion.add(opcionAsignacion);
+    selectorAsignacion.add(new Option("Alternativas originales", "original"));
+    const nivelRecomendado = datos.comparacion_asignaciones.nivel_recomendado;
+    [1, 2, 3, 4].forEach((nivel) => {{
+      const etiqueta = nivel === nivelRecomendado
+        ? `Nivel ${{nivel}} (recomendado)`
+        : `Nivel ${{nivel}}`;
+      selectorAsignacion.add(new Option(etiqueta, `nivel-${{nivel}}`));
+    }});
+
+    datos.etapas_simulacion.forEach((etapa) => {{
+      selectorSimulacionEtapa.add(
+        new Option(`${{etapa.paso}} — ${{etapa.nombre}}`, String(etapa.paso))
+      );
+    }});
+    selectorSimulacionEmergencia.add(new Option("Todas las emergencias", ""));
+    datos.emergencias.forEach((emergencia) => {{
+      selectorSimulacionEmergencia.add(
+        new Option(`${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`, emergencia.id)
+      );
+    }});
+
+    const etiquetasEstado = {{
+      asignada: "asignada",
+      en_camino: "en camino",
+      en_atencion: "en atención",
+      trasladada: "trasladada",
+      trasladando: "trasladando",
+      finalizada: "finalizada",
+      sin_asignacion: "sin asignación",
+      disponible: "disponible"
+    }};
+    const mostrarEstado = (estado) => etiquetasEstado[estado] || estado;
+
+    function limpiarCapasAsignacion() {{
+      capaAsignacionRutas.clearLayers();
+      capaAsignacionEstablecimientos.clearLayers();
+    }}
+
+    function limpiarAsignacion() {{
+      limpiarCapasAsignacion();
+      Object.values(marcadoresBase).forEach((marcador) => marcador.setOpacity(1));
+      Object.values(marcadoresEmergencia).forEach((marcador) => {{
+        marcador.setOpacity(1);
+        marcador.setZIndexOffset(0);
+      }});
+    }}
+
+    function reiniciarSimulacionUI() {{
+      selectorSimulacionEtapa.value = "0";
+      selectorSimulacionEmergencia.value = "";
+      resultadoSimulacion.textContent = "Elegí un conjunto de asignación para ver la simulación.";
+    }}
+
+    function reiniciarAsignacionUI() {{
+      selectorAsignacion.selectedIndex = 0;
+      resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+      reiniciarSimulacionUI();
+    }}
+
+    function estiloTramo(paso, tipo) {{
+      if (tipo === "inicial") {{
+        return paso <= 2
+          ? {{ color: "#7b2cbf", weight: 5, opacity: 0.92 }}
+          : {{ color: "#7b2cbf", weight: 4, opacity: 0.42 }};
+      }}
+      if (paso <= 2) {{
+        return {{
+          color: "#00875a", weight: 4, opacity: 0.4, dashArray: "8 8"
+        }};
+      }}
+      return {{ color: "#00875a", weight: 5, opacity: 0.92 }};
+    }}
+
+    function aplicarAsignacion() {{
+      limpiarAsignacion();
+      limpiarCapasHeuristicas();
+      selectorEmergenciaHeuristica.selectedIndex = 0;
+      reiniciarAlternativasHeuristicas();
+      resultadoHeuristica.textContent = "Elegí una emergencia para ver los candidatos conservados.";
+      const clave = selectorAsignacion.value;
+      if (!clave) {{
+        resultadoAsignacion.textContent = "Elegí un conjunto para ver la asignación global.";
+        reiniciarSimulacionUI();
+        return;
+      }}
+      const asignacion = datos.asignaciones[clave];
+      const simulacion = datos.simulaciones[clave];
+      if (!asignacion || !simulacion) {{
+        resultadoAsignacion.textContent = "El conjunto seleccionado no tiene datos.";
+        reiniciarSimulacionUI();
+        return;
+      }}
+      const paso = Number(selectorSimulacionEtapa.value || "0");
+      const estadoSimulacion = simulacion.estados[paso] || simulacion.estados[0];
+      const estadoEmergencias = estadoSimulacion.emergencias;
+      const estadoAmbulancias = estadoSimulacion.ambulancias;
+      const emergenciaFiltro = selectorSimulacionEmergencia.value;
+
+      const usadas = new Set(asignacion.ambulancias_utilizadas);
+      datos.ambulancias.forEach((ambulancia) => {{
+        const marcador = marcadoresBase[ambulancia.base_id];
+        if (marcador) marcador.setOpacity(usadas.has(ambulancia.id) ? 1 : 0.25);
+      }});
+      const atendidas = new Set(asignacion.emergencias_atendidas);
+      datos.emergencias.forEach((emergencia) => {{
+        const marcador = marcadoresEmergencia[emergencia.id];
+        if (!marcador) return;
+        marcador.setOpacity(atendidas.has(emergencia.id) ? 1 : 0.35);
+        if (atendidas.has(emergencia.id)) marcador.setZIndexOffset(1000);
+      }});
+      if (emergenciaFiltro && marcadoresEmergencia[emergenciaFiltro]) {{
+        marcadoresEmergencia[emergenciaFiltro].setZIndexOffset(2000);
+      }}
+
+      const elegidos = new Set(asignacion.establecimientos_seleccionados);
+      datos.establecimientos.forEach((establecimiento) => {{
+        const elegido = elegidos.has(establecimiento.id);
+        L.circleMarker([establecimiento.latitud, establecimiento.longitud], {{
+          radius: elegido ? 20 : 12,
+          color: elegido ? "#075c9e" : "#7f8783",
+          weight: elegido ? 4 : 2,
+          opacity: elegido ? 0.95 : 0.35,
+          fillColor: elegido ? "#075c9e" : "#7f8783",
+          fillOpacity: elegido ? 0.18 : 0.03,
+          interactive: false
+        }}).addTo(capaAsignacionEstablecimientos);
+      }});
+
+      const alternativas = emergenciaFiltro
+        ? asignacion.alternativas.filter(
+            (alternativa) => alternativa.emergencia_id === emergenciaFiltro
+          )
+        : asignacion.alternativas;
+      const capas = [];
+      alternativas.forEach((alternativa) => {{
+        const rutaInicial = datos.rutas_ambulancia_emergencia[
+          `${{alternativa.ambulancia_id}}|${{alternativa.emergencia_id}}`
+        ];
+        const rutaDestino = datos.rutas_emergencia_establecimiento[
+          `${{alternativa.emergencia_id}}|${{alternativa.establecimiento_id}}`
+        ];
+        if (rutaInicial && rutaInicial.coordenadas.length) {{
+          capas.push(L.polyline(
+            rutaInicial.coordenadas, estiloTramo(paso, "inicial")
+          ).bindTooltip(
+            `${{alternativa.ambulancia_id}} → ${{alternativa.emergencia_id}}`
+          ).addTo(capaAsignacionRutas));
+        }}
+        if (rutaDestino && rutaDestino.coordenadas.length) {{
+          capas.push(L.polyline(
+            rutaDestino.coordenadas, estiloTramo(paso, "destino")
+          ).bindTooltip(
+            `${{alternativa.emergencia_id}} → ${{alternativa.establecimiento_id}}`
+          ).addTo(capaAsignacionRutas));
+        }}
+      }});
+      if (capas.length) {{
+        mapa.fitBounds(L.featureGroup(capas).getBounds(), {{
+          padding: [36, 36], maxZoom: 16
+        }});
+      }} else if (emergenciaFiltro) {{
+        const emergencia = datos.emergencias.find(
+          (item) => item.id === emergenciaFiltro
+        );
+        if (emergencia) mapa.setView([emergencia.latitud, emergencia.longitud], 15);
+      }}
+
+      const etiquetaConjunto = clave === "original"
+        ? "originales"
+        : `nivel ${{clave.replace("nivel-", "")}}`;
+      const detalle = asignacion.alternativas.map((alternativa) => {{
+        const estadoEmergencia = estadoEmergencias[alternativa.emergencia_id];
+        const estadoAmbulancia = estadoAmbulancias[alternativa.ambulancia_id];
+        return `<li>${{escapar(alternativa.emergencia_id)}} → ` +
+          `${{escapar(alternativa.ambulancia_id)}} → ` +
+          `${{escapar(alternativa.establecimiento_id)}} ` +
+          `(${{mostrarMetros(alternativa.costo_seleccion)}})<br>` +
+          `<span>Emergencia: ${{mostrarEstado(estadoEmergencia ? estadoEmergencia.estado : "—")}}; ` +
+          `ambulancia: ${{mostrarEstado(estadoAmbulancia ? estadoAmbulancia.estado : "—")}}</span></li>`;
+      }}).join("") || "<li>Ninguna</li>";
+      const sinAsignar = asignacion.emergencias_sin_asignar.map(
+        (emergenciaId) => (
+          `<li>${{escapar(emergenciaId)}}: ` +
+          `${{escapar(asignacion.motivos_sin_asignar[emergenciaId])}}</li>`
+        )
+      ).join("") || "<li>Ninguna</li>";
+      const perdidaHeuristica = datos.comparacion_asignaciones
+        .perdida_por_heuristica
+        ? datos.comparacion_asignaciones.niveles_con_perdida.join(", ")
+        : "ninguno";
+      resultadoAsignacion.innerHTML = `<dl>
+        <div><dt>Conjunto:</dt><dd>${{etiquetaConjunto}}</dd></div>
+        <div><dt>Atendidas:</dt><dd>${{asignacion.emergencias_atendidas.length}} / ${{asignacion.orden_prioridad.length}}</dd></div>
+        <div><dt>Sin asignar:</dt><dd>${{asignacion.emergencias_sin_asignar.length}}</dd></div>
+        <div><dt>Costo total:</dt><dd>${{mostrarMetros(asignacion.costo_total)}}</dd></div>
+        <div><dt>Completa:</dt><dd>${{asignacion.es_completa ? "Sí" : "No"}}</dd></div>
+        <div><dt>Óptima dentro del conjunto:</dt><dd>${{asignacion.es_optima ? "Sí" : "No"}}</dd></div>
+        <div><dt>Nivel recomendado:</dt><dd>${{nivelRecomendado ?? "—"}}</dd></div>
+        <div><dt>Niveles con pérdida:</dt><dd>${{perdidaHeuristica}}</dd></div>
+      </dl>
+      <ul class="popup-list"><li><strong>Asignaciones</strong></li>${{detalle}}</ul>
+      <ul class="popup-list"><li><strong>Sin asignar</strong></li>${{sinAsignar}}</ul>`;
+
+      const estadosEmergencias = datos.emergencias.map((emergencia) => {{
+        const estado = estadoEmergencias[emergencia.id];
+        return `<li>${{escapar(emergencia.id)}}: ` +
+          `${{mostrarEstado(estado ? estado.estado : "—")}}</li>`;
+      }}).join("") || "<li>Ninguna</li>";
+      const estadosAmbulancias = datos.ambulancias.map((ambulancia) => {{
+        const estado = estadoAmbulancias[ambulancia.id];
+        return `<li>${{escapar(ambulancia.id)}}: ` +
+          `${{mostrarEstado(estado ? estado.estado : "—")}}</li>`;
+      }}).join("") || "<li>Ninguna</li>";
+      let detalleSeleccion = "";
+      if (emergenciaFiltro) {{
+        const estado = estadoEmergencias[emergenciaFiltro];
+        const atencion = simulacion.atenciones.find(
+          (item) => item.emergencia_id === emergenciaFiltro
+        );
+        if (atencion) {{
+          detalleSeleccion = `<div><dt>Emergencia seleccionada:</dt>` +
+            `<dd>${{escapar(emergenciaFiltro)}} — ${{mostrarEstado(estado.estado)}}; ` +
+            `ambulancia ${{escapar(atencion.ambulancia_id)}} ` +
+            `(${{mostrarEstado(estadoAmbulancias[atencion.ambulancia_id].estado)}})</dd></div>` +
+            `<div><dt>Recorrido:</dt><dd>` +
+            `${{mostrarMetros(atencion.distancia_ambulancia_emergencia_m)}} + ` +
+            `${{mostrarMetros(atencion.distancia_emergencia_establecimiento_m)}} = ` +
+            `${{mostrarMetros(atencion.distancia_total_m)}}; ` +
+            `penalización ${{mostrarMetros(atencion.penalizacion_establecimiento_m)}}; ` +
+            `costo ${{mostrarMetros(atencion.costo_seleccion)}}</dd></div>`;
+        }} else {{
+          detalleSeleccion = `<div><dt>Emergencia seleccionada:</dt>` +
+            `<dd>${{escapar(emergenciaFiltro)}} — sin asignación (` +
+            `${{escapar(estado.motivo_sin_asignar || "motivo_no_informado")}})</dd></div>`;
+        }}
+      }}
+      resultadoSimulacion.innerHTML = `<dl>
+        <div><dt>Tipo:</dt><dd>lógica por etapas, sin tiempos reales</dd></div>
+        <div><dt>Etapa:</dt><dd>${{estadoSimulacion.paso}} / ${{simulacion.total_pasos}} — ${{escapar(estadoSimulacion.nombre)}}</dd></div>
+        <div><dt>Atenciones:</dt><dd>${{simulacion.cantidad_atenciones}}</dd></div>
+        <div><dt>Completadas:</dt><dd>${{estadoSimulacion.cantidad_completadas}}</dd></div>
+        <div><dt>Sin asignar:</dt><dd>${{simulacion.cantidad_sin_asignar}}</dd></div>
+        <div><dt>Costo total:</dt><dd>${{mostrarMetros(simulacion.costo_total)}}</dd></div>
+        <div><dt>Distancia total:</dt><dd>${{mostrarMetros(simulacion.distancia_total)}}</dd></div>
+        <div><dt>Penalizaciones:</dt><dd>${{mostrarMetros(simulacion.penalizacion_total)}}</dd></div>
+        ${{detalleSeleccion}}
+      </dl>
+      <ul class="popup-list"><li><strong>Estado de emergencias</strong></li>${{estadosEmergencias}}</ul>
+      <ul class="popup-list"><li><strong>Estado de ambulancias</strong></li>${{estadosAmbulancias}}</ul>`;
+    }}
+
+    function mostrarEvaluacion() {{
+      const contenedor = document.getElementById("resultado-evaluacion");
+      const evaluacion = datos.evaluacion;
+      if (!evaluacion || !evaluacion.escenarios.length) {{
+        contenedor.textContent = "No hay datos de evaluación disponibles.";
+        return;
+      }}
+      const filas = evaluacion.escenarios.map((metricas) => {{
+        const reduccion = Math.max(
+          0, Math.min(100, Number(metricas.porcentaje_reduccion) || 0)
+        );
+        const diferencias = metricas.diferencias_respecto_original.length;
+        return `<tr>
+          <td>${{escapar(metricas.etiqueta)}}</td>
+          <td>${{metricas.alternativas_conservadas}} / ${{metricas.alternativas_generadas}}</td>
+          <td>${{metricas.alternativas_evaluadas}}</td>
+          <td><span class="barra-reduccion"><span style="width:${{reduccion}}%"></span></span>${{reduccion.toFixed(2)}} %</td>
+          <td>${{metricas.emergencias_atendidas}}</td>
+          <td>${{metricas.emergencias_sin_asignar}}</td>
+          <td>${{metricas.ambulancias_utilizadas.map(escapar).join(", ")}}</td>
+          <td>${{metricas.establecimientos_seleccionados.map(escapar).join(", ")}}</td>
+          <td>${{mostrarMetros(metricas.costo_total)}}</td>
+          <td>${{mostrarMetros(metricas.distancia_total)}}</td>
+          <td>${{mostrarMetros(metricas.penalizacion_total)}}</td>
+          <td>${{diferencias ? `${{diferencias}} cambio(s)` : "sin diferencias"}}</td>
+        </tr>`;
+      }}).join("");
+      const nivelesConPerdida = evaluacion.niveles_con_perdida.length
+        ? evaluacion.niveles_con_perdida.join(", ")
+        : "ninguno";
+      contenedor.innerHTML = `<p>
+        Comparación dinámica del escenario original y los niveles 1 a 4.
+        Nivel recomendado: <strong>${{evaluacion.nivel_recomendado ?? "—"}}</strong>;
+        pérdida por heurística: <strong>${{evaluacion.perdida_por_heuristica ? "sí" : "no"}}</strong>;
+        niveles con pérdida: <strong>${{nivelesConPerdida}}</strong>;
+        mismos resultados: <strong>${{evaluacion.todos_mismos_resultados ? "sí" : "no"}}</strong>;
+        mismos costos: <strong>${{evaluacion.todos_mismos_costos ? "sí" : "no"}}</strong>.
+      </p>
+      <table class="tabla-evaluacion">
+        <thead><tr>
+          <th>Escenario</th>
+          <th>Conservadas / generadas</th>
+          <th>Evaluadas</th>
+          <th>Reducción</th>
+          <th>Atendidas</th>
+          <th>Sin asignar</th>
+          <th>Ambulancias</th>
+          <th>Destinos</th>
+          <th>Costo</th>
+          <th>Distancia</th>
+          <th>Penalizaciones</th>
+          <th>Diferencias</th>
+        </tr></thead>
+        <tbody>${{filas}}</tbody>
+      </table>`;
+    }}
+
+    selectorAsignacion.addEventListener("change", () => {{
+      selectorSimulacionEtapa.value = "0";
+      selectorSimulacionEmergencia.value = "";
+      aplicarAsignacion();
+    }});
+    selectorSimulacionEtapa.addEventListener("change", aplicarAsignacion);
+    selectorSimulacionEmergencia.addEventListener("change", aplicarAsignacion);
+    aplicarAsignacion();
+    mostrarEvaluacion();
   </script>
 </body>
 </html>
