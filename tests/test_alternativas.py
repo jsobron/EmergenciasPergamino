@@ -39,26 +39,41 @@ class AlternativasTest(unittest.TestCase):
             grafo or self.grafo,
         ).alternativas[0]
 
-    def test_genera_exactamente_120_alternativas_factibles(self) -> None:
-        self.assertEqual(120, len(self.resultado.alternativas))
-        self.assertTrue(all(a.es_factible for a in self.resultado.alternativas))
+    def test_genera_exactamente_100_alternativas(self) -> None:
+        self.assertEqual(100, len(self.resultado.alternativas))
+        factibles = [a for a in self.resultado.alternativas if a.es_factible]
+        no_factibles = [a for a in self.resultado.alternativas if not a.es_factible]
+        self.assertEqual(44, len(factibles))
+        self.assertEqual(56, len(no_factibles))
+        motivos = [
+            motivo for a in no_factibles for motivo in a.motivos_descarte
+        ]
+        self.assertEqual(
+            12, motivos.count("ambulancia_de_reserva_solo_gravedad_3")
+        )
+        self.assertEqual(50, motivos.count("establecimiento_no_habilitado"))
+        self.assertTrue(all(
+            "establecimiento_no_habilitado" in a.motivos_descarte
+            or "ambulancia_de_reserva_solo_gravedad_3" in a.motivos_descarte
+            for a in no_factibles
+        ))
 
-    def test_cada_emergencia_tiene_24_alternativas(self) -> None:
+    def test_cada_emergencia_tiene_20_alternativas(self) -> None:
         for emergencia in self.emergencias:
             cantidad = sum(a.emergencia_id == emergencia.id for a in self.resultado.alternativas)
-            self.assertEqual(24, cantidad)
+            self.assertEqual(20, cantidad)
 
     def test_cada_combinacion_es_unica(self) -> None:
         claves = {
             (a.ambulancia_id, a.emergencia_id, a.establecimiento_id)
             for a in self.resultado.alternativas
         }
-        self.assertEqual(120, len(claves))
+        self.assertEqual(100, len(claves))
 
-    def test_reutiliza_30_mas_20_rutas(self) -> None:
-        self.assertEqual(30, len(self.resultado.rutas_ambulancia_emergencia))
+    def test_reutiliza_25_mas_20_rutas(self) -> None:
+        self.assertEqual(25, len(self.resultado.rutas_ambulancia_emergencia))
         self.assertEqual(20, len(self.resultado.rutas_emergencia_establecimiento))
-        self.assertEqual(50, self.resultado.rutas_unicas_calculadas)
+        self.assertEqual(30, self.resultado.rutas_unicas_calculadas)
 
     def test_conserva_tramos_total_penalizacion_y_costo(self) -> None:
         for alternativa in self.resultado.alternativas:
@@ -78,15 +93,52 @@ class AlternativasTest(unittest.TestCase):
         self.assertTrue(all(a.penalizacion_establecimiento_m == 0 for a in san_jose))
         self.assertTrue(all(a.penalizacion_establecimiento_m == 1000 for a in clinicas))
 
+    def test_guardias_tres_y_cuatro_no_reciben_ambulancias(self) -> None:
+        inactivas = [
+            a for a in self.resultado.alternativas
+            if a.establecimiento_id in {"GUARDIA-3", "GUARDIA-4"}
+        ]
+        self.assertTrue(inactivas)
+        self.assertTrue(all(not a.es_factible for a in inactivas))
+        self.assertTrue(all(
+            "establecimiento_no_habilitado" in a.motivos_descarte
+            for a in inactivas
+        ))
+
     def test_ambulancia_no_disponible(self) -> None:
         alternativa = self.construir_una(ambulancia=replace(self.ambulancias[0], disponible=False))
         self.assertFalse(alternativa.es_factible)
         self.assertIn("ambulancia_no_disponible", alternativa.motivos_descarte)
 
     def test_complejidad_ambulancia_insuficiente(self) -> None:
+        ambulancia = replace(self.ambulancias[0], complejidad=2)
         emergencia = replace(self.emergencias[0], complejidad_requerida=3)
-        alternativa = self.construir_una(emergencia=emergencia)
+        alternativa = self.construir_una(
+            ambulancia=ambulancia, emergencia=emergencia
+        )
         self.assertIn("complejidad_ambulancia_insuficiente", alternativa.motivos_descarte)
+
+    def test_ambulancia_de_reserva_solo_para_gravedad_3(self) -> None:
+        ambulancia = replace(self.ambulancias[0], reserva=True, nombre="Reserva")
+
+        grave = self.construir_una(
+            ambulancia=ambulancia,
+            emergencia=replace(self.emergencias[0], gravedad=3),
+        )
+        self.assertTrue(grave.es_factible)
+        self.assertNotIn("ambulancia_de_reserva_solo_gravedad_3", grave.motivos_descarte)
+
+        for gravedad in (1, 2):
+            with self.subTest(gravedad=gravedad):
+                alternativa = self.construir_una(
+                    ambulancia=ambulancia,
+                    emergencia=replace(self.emergencias[0], gravedad=gravedad),
+                )
+                self.assertFalse(alternativa.es_factible)
+                self.assertIn(
+                    "ambulancia_de_reserva_solo_gravedad_3",
+                    alternativa.motivos_descarte,
+                )
 
     def test_capacidad_ambulancia_insuficiente(self) -> None:
         emergencia = replace(self.emergencias[0], cantidad_pacientes=2)

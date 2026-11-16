@@ -10,7 +10,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 
 class CliAlternativasTest(unittest.TestCase):
-    def test_resumen_informa_120_factibles_y_50_rutas(self) -> None:
+    def test_resumen_informa_44_factibles_y_30_rutas(self) -> None:
         salida = io.StringIO()
         with redirect_stdout(salida):
             resumir_alternativas(
@@ -18,13 +18,13 @@ class CliAlternativasTest(unittest.TestCase):
                 RAIZ / "config/emergencias.json", RAIZ / "config/establecimientos.json",
             )
         texto = salida.getvalue()
-        self.assertIn("Alternativas generadas: 120", texto)
-        self.assertIn("Alternativas factibles: 120", texto)
-        self.assertIn("Alternativas no factibles: 0", texto)
-        self.assertIn("Rutas únicas calculadas/reutilizadas: 50", texto)
-        self.assertIn("E1: 24", texto)
+        self.assertIn("Alternativas generadas: 100", texto)
+        self.assertIn("Alternativas factibles: 44", texto)
+        self.assertIn("Alternativas no factibles: 56", texto)
+        self.assertIn("Rutas únicas calculadas/reutilizadas: 30", texto)
+        self.assertIn("E1: 20", texto)
 
-    def test_listado_de_e1_contiene_24_alternativas(self) -> None:
+    def test_listado_de_e1_contiene_20_alternativas(self) -> None:
         salida = io.StringIO()
         with redirect_stdout(salida):
             listar_alternativas(
@@ -35,7 +35,7 @@ class CliAlternativasTest(unittest.TestCase):
             linea for linea in salida.getvalue().splitlines()
             if len(linea) > 1 and linea[0] == "A" and linea[1].isdigit()
         ]
-        self.assertEqual(24, len(lineas))
+        self.assertEqual(20, len(lineas))
 
     def test_rechaza_emergencia_inexistente(self) -> None:
         with self.assertRaisesRegex(ValueError, "Emergencia inexistente"):

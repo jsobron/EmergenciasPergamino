@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>URGENCIAS Pergamino — Guía de exposición</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 18mm;
+  }
+
+  :root {
+    --ink: #172b3a;
+    --muted: #5b6b78;
+    --accent: #0b6fa4;
+    --accent-2: #0f8b8d;
+    --line: #d6e2ea;
+    --soft: #f3f7fa;
+    --warn: #fff7e6;
+    --warn-line: #e0a52b;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 10.5pt/1.48 "Segoe UI", Arial, sans-serif;
+    background: #fff;
+  }
+
+  h1, h2, h3 {
+    color: #0d3b57;
+    line-height: 1.2;
+    page-break-after: avoid;
+  }
+
+  h1 {
+    margin: 0 0 10mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid var(--accent);
+    font-size: 21pt;
+    page-break-before: always;
+  }
+
+  h1.first { page-break-before: avoid; }
+
+  h2 {
+    margin: 7mm 0 3mm;
+    font-size: 14pt;
+  }
+
+  h3 {
+    margin: 5mm 0 2mm;
+    font-size: 11.5pt;
+  }
+
+  p { margin: 0 0 3.2mm; }
+
+  ul, ol { margin: 0 0 4mm 5.5mm; padding: 0; }
+  li { margin: 0 0 1.5mm; }
+
+  strong { color: #0d3b57; }
+
+  a { color: var(--accent); text-decoration: none; }
+
+  .cover {
+    min-height: 245mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+  }
+
+  .cover .kicker {
+    margin-bottom: 5mm;
+    color: var(--accent-2);
+    font-size: 10pt;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .cover h1 {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 36pt;
+    letter-spacing: -0.03em;
+  }
+
+  .cover .subtitle {
+    max-width: 150mm;
+    margin: 5mm 0 12mm;
+    color: var(--muted);
+    font-size: 15pt;
+    line-height: 1.35;
+  }
+
+  .cover .rule {
+    width: 42mm;
+    height: 5px;
+    margin-bottom: 12mm;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 999px;
+  }
+
+  .cover .meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm 10mm;
+    max-width: 150mm;
+    padding: 6mm 7mm;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 10pt;
+  }
+
+  .cover .meta b { display: block; color: var(--ink); font-size: 11pt; }
+
+  .toc {
+    padding: 6mm 8mm;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--soft);
+  }
+
+  .toc h2 { margin-top: 0; }
+
+  .toc ol {
+    columns: 2;
+    column-gap: 14mm;
+    margin-left: 6mm;
+  }
+
+  .box {
+    margin: 4mm 0 5mm;
+    padding: 4mm 5mm;
+    border-left: 4px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    background: var(--soft);
+    page-break-inside: avoid;
+  }
+
+  .box.warn {
+    border-left-color: var(--warn-line);
+    background: var(--warn);
+  }
+
+  .box .label {
+    display: block;
+    margin-bottom: 1.5mm;
+    color: var(--accent);
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .box.warn .label { color: #9a6500; }
+
+  .box p:last-child, .box ul:last-child { margin-bottom: 0; }
+
+  table {
+    width: 100%;
+    margin: 3mm 0 5mm;
+    border-collapse: collapse;
+    font-size: 9.3pt;
+    page-break-inside: auto;
+  }
+
+  th, td {
+    padding: 2.2mm 2.5mm;
+    border: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background: #e8f1f6;
+    color: #0d3b57;
+    font-weight: 700;
+  }
+
+  tbody tr:nth-child(even) { background: #f7fafc; }
+  tr { page-break-inside: avoid; }
+
+  code {
+    padding: 0.4mm 1.2mm;
+    border-radius: 3px;
+    background: #edf3f7;
+    color: #0a4f76;
+    font: 9.2pt/1.3 Consolas, "Cascadia Mono", monospace;
+  }
+
+  pre {
+    margin: 3mm 0 5mm;
+    padding: 4mm 5mm;
+    border-radius: 6px;
+    background: #0f2433;
+    color: #e9f4fb;
+    font: 9pt/1.45 Consolas, "Cascadia Mono", monospace;
+    white-space: pre-wrap;
+    page-break-inside: avoid;
+  }
+
+  pre code {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+  }
+
+  .compact p, .compact li { margin-bottom: 1.5mm; }
+
+  .center { text-align: center; }
+
+  .tag {
+    display: inline-block;
+    margin: 0 1mm 1mm 0;
+    padding: 1mm 2.2mm;
+    border: 1px solid #b9d7e8;
+    border-radius: 999px;
+    background: #eef8fd;
+    color: #0a5a86;
+    font-size: 8.8pt;
+    font-weight: 700;
+  }
+
+  .page-note {
+    margin-top: 8mm;
+    padding-top: 3mm;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 9pt;
+  }
+
+  .checklist { list-style: none; margin-left: 0; }
+  .checklist li { padding-left: 6mm; text-indent: -6mm; }
+  .checklist li::before {
+    content: "□";
+    display: inline-block;
+    width: 5mm;
+    color: var(--accent);
+    font-size: 12pt;
+    line-height: 1;
+  }
+
+  .avoid-break { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="kicker">Guía de exposición</div>
+  <h1>URGENCIAS Pergamino</h1>
+  <div class="rule"></div>
+  <p class="subtitle">Modelo académico de asignación de ambulancias, destinos y recorridos viales para emergencias urbanas.</p>
+  <div class="meta">
+    <div><b>Qué es</b>Un sistema reproducible de análisis y simulación, no un despacho real.</div>
+    <div><b>Pipeline</b>Grafo vial, alternativas, heurísticas, asignación, simulación y evaluación.</div>
+    <div><b>Demo</b>CLI en Python y mapa interactivo con Leaflet y OpenStreetMap.</div>
+    <div><b>Validación</b>170 pruebas automatizadas y verificación de sintaxis JavaScript.</div>
+  </div>
+</section>
+
+<h1 class="first">Cómo usar esta guía</h1>
+
+<p>Esta guía está pensada para una exposición de entre 10 y 15 minutos. La idea es contar el programa como un pipeline: primero el problema, después los datos, luego las etapas y finalmente los resultados y la demo.</p>
+
+<div class="toc">
+  <h2>Contenido</h2>
+  <ol>
+    <li>Apertura: qué es y qué problema resuelve</li>
+    <li>Datos del modelo</li>
+    <li>Arquitectura general</li>
+    <li>Grafo vial y Dijkstra</li>
+    <li>Alternativas y factibilidad</li>
+    <li>Heurísticas k/h</li>
+    <li>Asignación global</li>
+    <li>Simulación lógica</li>
+    <li>Evaluación y resultados</li>
+    <li>Mapa interactivo</li>
+    <li>CLI para la demo</li>
+    <li>Pruebas y confiabilidad</li>
+    <li>Limitaciones</li>
+    <li>Guion de 10 minutos</li>
+    <li>Preguntas probables</li>
+    <li>Checklist antes de exponer</li>
+  </ol>
+</div>
+
+<div class="box">
+  <span class="label">Idea central</span>
+  <p>El programa decide, para cada emergencia, qué ambulancia la atiende, desde qué base sale, a qué establecimiento traslada al paciente y qué recorrido vial usa. Todo se mide en metros y se compara con un costo trazable.</p>
+</div>
+
+<h1>1. Apertura: qué es y qué problema resuelve</h1>
+
+<div class="box">
+  <span class="label">Frase para empezar</span>
+  <p>“EmergenciasPergamino es un modelo académico que decide qué ambulancia atiende cada emergencia, desde qué base sale, a qué establecimiento traslada al paciente y qué recorrido vial usa, minimizando el costo en metros.”</p>
+</div>
+
+<p>El programa responde cinco preguntas para cada emergencia:</p>
+
+<ol>
+  <li>¿Qué ambulancia la atiende?</li>
+  <li>¿Desde qué base parte?</li>
+  <li>¿A qué establecimiento se traslada al paciente?</li>
+  <li>¿Qué camino vial recorre en cada tramo?</li>
+  <li>¿Cuánto cuesta esa decisión y cómo evoluciona la atención?</li>
+</ol>
+
+<div class="box warn">
+  <span class="label">Aclaración importante</span>
+  <p>No es un sistema operativo real de despacho de emergencias. Es un modelo reproducible con datos simulados, pensado para comparar algoritmos, heurísticas y escenarios.</p>
+</div>
+
+<h1>2. Datos del modelo</h1>
+
+<h2>Ambulancias: cinco unidades Clase C</h2>
+
+<table>
+  <thead>
+    <tr><th>Ambulancia</th><th>Base</th><th>Reserva</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>A1</td><td>SAME</td><td>No</td></tr>
+    <tr><td>A2</td><td>SAME</td><td>No</td></tr>
+    <tr><td>A3</td><td>SAME</td><td>Sí, solo gravedad 3</td></tr>
+    <tr><td>A4</td><td>Medicar / GUARDIA-5</td><td>No</td></tr>
+    <tr><td>A5</td><td>Medicar / GUARDIA-5</td><td>No</td></tr>
+  </tbody>
+</table>
+
+<p>Todas tienen complejidad 3, capacidad para un paciente y sin equipamiento adicional.</p>
+
+<h2>Emergencias: cinco casos</h2>
+
+<table>
+  <thead>
+    <tr><th>Emergencia</th><th>Gravedad</th><th>Complejidad requerida</th><th>Espera</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>E1</td><td>3</td><td>2</td><td>8 min</td></tr>
+    <tr><td>E2</td><td>3</td><td>2</td><td>15 min</td></tr>
+    <tr><td>E3</td><td>2</td><td>2</td><td>20 min</td></tr>
+    <tr><td>E4</td><td>2</td><td>1</td><td>10 min</td></tr>
+    <tr><td>E5</td><td>1</td><td>1</td><td>25 min</td></tr>
+  </tbody>
+</table>
+
+<h2>Establecimientos: cuatro, pero solo dos habilitados como destino</h2>
+
+<table>
+  <thead>
+    <tr><th>Destino</th><th>Estado</th><th>Prioridad</th><th>Penalización</th><th>Complejidad máxima</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>GUARDIA-1 — Hospital San José</td><td>Habilitado</td><td>1</td><td>0 m</td><td>3</td></tr>
+    <tr><td>GUARDIA-2 — Clínica Pergamino</td><td>Habilitado</td><td>2</td><td>1000 m</td><td>2</td></tr>
+    <tr><td>GUARDIA-3 — Clínica Centro</td><td>Inactivo</td><td>2</td><td>1000 m</td><td>2</td></tr>
+    <tr><td>GUARDIA-4 — Clínica General Paz</td><td>Inactivo</td><td>2</td><td>1000 m</td><td>2</td></tr>
+  </tbody>
+</table>
+
+<p>SAME y Medicar funcionan como bases de ambulancias, pero no reciben pacientes.</p>
+
+<h1>3. Arquitectura general</h1>
+
+<p>El programa está separado en módulos, uno por etapa. Cada etapa reutiliza los resultados de la anterior: no se recalculan rutas en asignación, simulación ni evaluación.</p>
+
+<table>
+  <thead>
+    <tr><th>Módulo</th><th>Responsabilidad</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>datos.py</code></td><td>Prepara las bases desde los datos geográficos.</td></tr>
+    <tr><td><code>geonode.py</code></td><td>Descarga capas WFS desde GeoNode.</td></tr>
+    <tr><td><code>grafo.py</code></td><td>Construye el grafo vial dirigido y aplica Dijkstra.</td></tr>
+    <tr><td><code>ambulancias.py</code></td><td>Carga y valida ambulancias.</td></tr>
+    <tr><td><code>emergencias.py</code></td><td>Carga emergencias y analiza conectividad.</td></tr>
+    <tr><td><code>establecimientos.py</code></td><td>Carga destinos, prioridades y penalizaciones.</td></tr>
+    <tr><td><code>alternativas.py</code></td><td>Genera combinaciones ambulancia-emergencia-destino.</td></tr>
+    <tr><td><code>heuristicas.py</code></td><td>Reduce candidatos con los niveles k/h.</td></tr>
+    <tr><td><code>asignacion.py</code></td><td>Resuelve la asignación global.</td></tr>
+    <tr><td><code>simulacion.py</code></td><td>Representa la atención por etapas lógicas.</td></tr>
+    <tr><td><code>evaluacion.py</code></td><td>Compara los cinco escenarios.</td></tr>
+    <tr><td><code>mapa.py</code></td><td>Genera el mapa HTML interactivo.</td></tr>
+    <tr><td><code>cli.py</code></td><td>Implementa la interfaz de línea de comandos.</td></tr>
+  </tbody>
+</table>
+
+<h1>4. Grafo vial y Dijkstra</h1>
+
+<p>Se descarga el callejero de Pergamino desde GeoNode, filtrando los tramos con <code>localidad = Pergamino</code> y <code>transitable = si</code>.</p>
+
+<p>Cada tramo se convierte en una arista dirigida:</p>
+
+<ul>
+  <li>peso = distancia geográfica en metros;</li>
+  <li>sentido <code>0</code>: doble mano;</li>
+  <li>sentido <code>1</code>: dirección de digitalización;</li>
+  <li>sentido <code>-1</code>: dirección contraria.</li>
+</ul>
+
+<p>Las bases, emergencias y establecimientos se conectan al nodo vial más cercano. La distancia al nodo se conserva como dato, pero no se suma dos veces.</p>
+
+<p><strong>Dijkstra</strong> calcula el camino mínimo entre dos nodos. Las rutas se calculan una sola vez y se guardan en caché.</p>
+
+<div class="box">
+  <span class="label">Números actuales</span>
+  <ul class="compact">
+    <li>5 ambulancias × 5 emergencias = 25 rutas ambulancia-emergencia.</li>
+    <li>5 emergencias × 4 establecimientos = 20 rutas emergencia-establecimiento.</li>
+    <li>Como las ambulancias comparten base, solo se calculan 30 rutas viales únicas.</li>
+  </ul>
+</div>
+
+<h1>5. Alternativas y factibilidad</h1>
+
+<p>Una alternativa completa combina:</p>
+
+<pre><code>ambulancia → emergencia → establecimiento</code></pre>
+
+<p>Se generan:</p>
+
+<pre><code>5 ambulancias × 5 emergencias × 4 destinos = 100 alternativas</code></pre>
+
+<p>Pero solo <strong>44 son factibles</strong>. Las otras 56 se descartan por:</p>
+
+<ul>
+  <li>50 por destinos inactivos: GUARDIA-3 y GUARDIA-4;</li>
+  <li>12 por la ambulancia de reserva, que solo puede ir a gravedad 3;</li>
+  <li>6 combinaciones acumulan ambos motivos.</li>
+</ul>
+
+<h2>Fórmulas</h2>
+
+<pre><code>distancia_total =
+    distancia(ambulancia, emergencia)
+    + distancia(emergencia, establecimiento)
+
+costo_seleccion =
+    distancia_total
+    + penalización del establecimiento</code></pre>
+
+<p>La penalización no modifica el mapa ni las rutas: solo sirve para comparar destinos.</p>
+
+<h2>Condiciones de factibilidad</h2>
+
+<p>Una alternativa es factible si:</p>
+
+<ul>
+  <li>la ambulancia está disponible;</li>
+  <li>no es de reserva, o la emergencia tiene gravedad 3;</li>
+  <li>la ambulancia tiene complejidad suficiente;</li>
+  <li>tiene capacidad para los pacientes;</li>
+  <li>tiene el equipamiento requerido;</li>
+  <li>existe ruta hasta la emergencia;</li>
+  <li>el establecimiento está habilitado como destino;</li>
+  <li>el establecimiento tiene complejidad suficiente;</li>
+  <li>existe ruta hasta el establecimiento.</li>
+</ul>
+
+<p>Cada alternativa descartada conserva su motivo. Eso permite auditar por qué no se usó.</p>
+
+<h1>6. Heurísticas k/h</h1>
+
+<p>La reducción conserva, para cada emergencia:</p>
+
+<ul>
+  <li>las <strong>k ambulancias compatibles más cercanas</strong>;</li>
+  <li>los <strong>h establecimientos compatibles</strong> con menor <code>distancia + penalización</code>.</li>
+</ul>
+
+<table>
+  <thead>
+    <tr><th>Nivel</th><th>k</th><th>h</th><th>Alternativas conservadas</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>3</td><td>2</td><td>30</td></tr>
+    <tr><td>2</td><td>4</td><td>3</td><td>40</td></tr>
+    <tr><td>3</td><td>5</td><td>4</td><td>44</td></tr>
+    <tr><td>4</td><td>6</td><td>4</td><td>44</td></tr>
+  </tbody>
+</table>
+
+<p>Además, las emergencias se ordenan por:</p>
+
+<ol>
+  <li>mayor gravedad;</li>
+  <li>menor cantidad de ambulancias compatibles;</li>
+  <li>mayor tiempo de espera;</li>
+  <li>identificador.</li>
+</ol>
+
+<div class="box">
+  <span class="label">Punto clave</span>
+  <p>La heurística no asigna nada. Solo reduce el conjunto de candidatos. Las alternativas descartadas quedan registradas con su motivo.</p>
+</div>
+
+<h1>7. Asignación global</h1>
+
+<p>La asignación elige como máximo una alternativa por emergencia y usa cada ambulancia una sola vez.</p>
+
+<p>El orden de comparación es lexicográfico:</p>
+
+<ol>
+  <li>maximizar la cantidad de emergencias atendidas;</li>
+  <li>maximizar el vector de prioridad de emergencias atendidas;</li>
+  <li>minimizar el costo total;</li>
+  <li>desempatar por identificadores lexicográficamente menores.</li>
+</ol>
+
+<p>Se usa <strong>backtracking determinista</strong> con dos podas:</p>
+
+<ul>
+  <li>para cada par emergencia-ambulancia se conserva solo el destino factible más barato;</li>
+  <li>se cortan las ramas que no pueden superar la mejor cantidad de emergencias ya encontrada.</li>
+</ul>
+
+<div class="box warn">
+  <span class="label">Por qué la poda por destino es válida</span>
+  <p>En este modelo la capacidad de los establecimientos no se comparte entre emergencias. Si dos alternativas usan la misma ambulancia y emergencia, solo importa la de menor costo.</p>
+</div>
+
+<h1>8. Simulación lógica</h1>
+
+<p>La simulación no usa tiempos reales. Recorre cinco etapas:</p>
+
+<table>
+  <thead>
+    <tr><th>Paso</th><th>Emergencia</th><th>Ambulancia</th><th>Significado</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0</td><td>asignada</td><td>asignada</td><td>Ambulancia y destino ya elegidos.</td></tr>
+    <tr><td>1</td><td>asignada</td><td>en_camino</td><td>Viaja hacia la emergencia.</td></tr>
+    <tr><td>2</td><td>en_atencion</td><td>en_atencion</td><td>Está en el lugar de la emergencia.</td></tr>
+    <tr><td>3</td><td>trasladada</td><td>trasladando</td><td>Paciente retirado; viaja al destino.</td></tr>
+    <tr><td>4</td><td>finalizada</td><td>finalizada</td><td>Atención y traslado completados.</td></tr>
+  </tbody>
+</table>
+
+<p>Una emergencia sin asignación queda <code>sin_asignacion</code> con su motivo. Una ambulancia no usada queda <code>disponible</code>.</p>
+
+<div class="box">
+  <span class="label">Aclaración para la exposición</span>
+  <p>El paso 3 no significa que el traslado terminó. La emergencia ya fue “trasladada”, pero la ambulancia sigue “trasladando”. La atención finaliza en el paso 4.</p>
+</div>
+
+<p>La simulación reutiliza rutas y costos de la asignación. No los recalcula. Si no coinciden, el programa falla.</p>
+
+<h1>9. Evaluación y resultados</h1>
+
+<p>Se comparan cinco escenarios: original y niveles 1 a 4. Las métricas incluyen alternativas generadas, factibles, conservadas y evaluadas; porcentaje de reducción; emergencias atendidas y sin asignar; ambulancias y destinos usados; costo, distancia y penalizaciones; diferencias contra el original; y estados finales.</p>
+
+<p>No hay métricas hardcodeadas: se calculan desde las asignaciones y simulaciones.</p>
+
+<h2>Resultados actuales</h2>
+
+<table>
+  <thead>
+    <tr><th>Escenario</th><th>Factibles</th><th>Conservadas</th><th>Evaluadas</th><th>Reducción</th><th>Atendidas</th><th>Costo</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Original</td><td>44</td><td>44</td><td>22</td><td>0.00 %</td><td>5</td><td>32231.476 m</td></tr>
+    <tr><td>Nivel 1</td><td>44</td><td>30</td><td>15</td><td>31.82 %</td><td>4</td><td>24615.300 m</td></tr>
+    <tr><td>Nivel 2</td><td>44</td><td>40</td><td>20</td><td>9.09 %</td><td>5</td><td>32231.476 m</td></tr>
+    <tr><td>Nivel 3</td><td>44</td><td>44</td><td>22</td><td>0.00 %</td><td>5</td><td>32231.476 m</td></tr>
+    <tr><td>Nivel 4</td><td>44</td><td>44</td><td>22</td><td>0.00 %</td><td>5</td><td>32231.476 m</td></tr>
+  </tbody>
+</table>
+
+<h2>Asignación original</h2>
+
+<table>
+  <thead>
+    <tr><th>Emergencia</th><th>Ambulancia</th><th>Base</th><th>Destino</th><th>Costo</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>E2</td><td>A3</td><td>SAME</td><td>GUARDIA-2</td><td>7820 m</td></tr>
+    <tr><td>E1</td><td>A1</td><td>SAME</td><td>GUARDIA-2</td><td>7154 m</td></tr>
+    <tr><td>E3</td><td>A4</td><td>GUARDIA-5</td><td>GUARDIA-2</td><td>3104 m</td></tr>
+    <tr><td>E4</td><td>A5</td><td>GUARDIA-5</td><td>GUARDIA-1</td><td>6538 m</td></tr>
+    <tr><td>E5</td><td>A2</td><td>SAME</td><td>GUARDIA-1</td><td>7616 m</td></tr>
+  </tbody>
+</table>
+
+<h2>Interpretación</h2>
+
+<ul>
+  <li>El original atiende las cinco emergencias.</li>
+  <li>El nivel 1 solo atiende cuatro: E5 queda sin asignar porque sus tres ambulancias candidatas ya fueron usadas.</li>
+  <li>En nivel 1, E2 pasa de A3 a A2 y A3 queda disponible.</li>
+  <li>Por eso el <strong>nivel recomendado es el 2</strong>: es el menor nivel que reproduce el resultado completo.</li>
+  <li>Niveles 3 y 4 no reducen nada porque ya conservan las 44 alternativas factibles.</li>
+</ul>
+
+<h1>10. Mapa interactivo</h1>
+
+<p>El mapa se genera con Leaflet y OpenStreetMap. Muestra la red vial, las bases, los establecimientos con colores según destino habilitado o inactivo, y las emergencias según gravedad.</p>
+
+<h2>Qué se puede hacer</h2>
+
+<ul>
+  <li>Elegir ambulancia, emergencia y establecimiento en el visor manual.</li>
+  <li>Ver los dos tramos: ambulancia → emergencia y emergencia → establecimiento.</li>
+  <li>Consultar distancia, costo y factibilidad.</li>
+  <li>Poner una ambulancia en uso y verla en el panel de liberación.</li>
+  <li>Agregar urgencias nuevas con grado y ubicación.</li>
+  <li>Liberar ambulancias manualmente o esperar la liberación automática.</li>
+</ul>
+
+<h2>Despacho y liberación</h2>
+
+<p>El botón <strong>Poner ambulancia en uso</strong> saca la urgencia del selector, marca la ambulancia como no disponible y agrega la atención al panel de liberación. Mientras la ambulancia está en uso, la urgencia no se puede quitar: el botón <strong>Quitar</strong> queda deshabilitado.</p>
+
+<p>El panel estima el tiempo hasta quedar disponible:</p>
+
+<pre><code>tiempo =
+    (recorrido asignado + regreso a la base)
+    / 1000 / 40 * 60
+    + 10 minutos</code></pre>
+
+<p>Supone 40 km/h y 10 minutos de atención. Al llegar a cero, la ambulancia se libera automáticamente. También se puede usar <strong>Liberar</strong> manualmente. Al liberarse, la urgencia pasa a <strong>Atendida</strong> con ambulancia y hora.</p>
+
+<h2>Urgencias nuevas</h2>
+
+<p>Se puede crear una urgencia con ID, grado de 1 a 3 y ubicación por latitud/longitud o con un clic en el mapa. El navegador conecta la ubicación con el nodo vial más cercano y calcula rutas y alternativas localmente.</p>
+
+<h1>11. CLI para la demo</h1>
+
+<p>Comandos sugeridos para mostrar durante la exposición:</p>
+
+<pre><code>py -m ambulancias_pergamino listar-ambulancias
+py -m ambulancias_pergamino listar-establecimientos
+py -m ambulancias_pergamino verificar-emergencias
+py -m ambulancias_pergamino resumir-alternativas
+py -m ambulancias_pergamino resumir-heuristicas
+py -m ambulancias_pergamino comparar-asignaciones
+py -m ambulancias_pergamino evaluar-escenarios</code></pre>
+
+<p>Para el mapa:</p>
+
+<pre><code>py -m ambulancias_pergamino exportar-mapa
+.\abrir-mapa.cmd</code></pre>
+
+<p>Si <code>python</code> no está en el PATH, usar <code>py</code>. El mapa también se puede servir manualmente con:</p>
+
+<pre><code>py -m http.server 8765 --directory data</code></pre>
+
+<h1>12. Pruebas y confiabilidad</h1>
+
+<p>La suite actual tiene <strong>170 pruebas</strong>.</p>
+
+<pre><code>py -m unittest discover -v</code></pre>
+
+<p>Cubre grafo y rutas, validación de configuraciones, alternativas y factibilidad, heurísticas, asignación y optimalidad dentro del conjunto, simulación y transiciones, evaluación de escenarios, CLI, exportación del mapa y sintaxis del JavaScript usando Node.js cuando está disponible.</p>
+
+<div class="box">
+  <span class="label">Detalle técnico</span>
+  <p>La validación del mapa no solo compara strings: ejecuta Node para verificar que el JavaScript generado sea sintácticamente válido.</p>
+</div>
+
+<h1>13. Limitaciones</h1>
+
+<ul>
+  <li>La simulación es lógica por etapas, no temporal.</li>
+  <li>El modelo central no usa velocidades ni tiempos reales.</li>
+  <li>No se modela el regreso a la base ni la reutilización de ambulancias en el núcleo.</li>
+  <li>La reserva es una regla fija.</li>
+  <li>La capacidad de los establecimientos no se comparte.</li>
+  <li>La optimalidad es dentro del conjunto evaluado, no del problema real.</li>
+  <li>Las heurísticas pueden descartar alternativas necesarias.</li>
+  <li>El mapa necesita Internet para Leaflet y OpenStreetMap.</li>
+  <li>Los datos son simulados.</li>
+</ul>
+
+<div class="box">
+  <span class="label">Frase de cierre</span>
+  <p>“El aporte del proyecto no es resolver el despacho real de Pergamino, sino mostrar de forma reproducible cómo se combinan datos geográficos, teoría de grafos, heurísticas, optimización y simulación para tomar una decisión trazable.”</p>
+</div>
+
+<h1>14. Guion de 10 minutos</h1>
+
+<table>
+  <thead>
+    <tr><th>Minuto</th><th>Contenido</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0–1</td><td>Problema y alcance académico.</td></tr>
+    <tr><td>1–2</td><td>Datos: cinco ambulancias, cinco emergencias, dos destinos activos.</td></tr>
+    <tr><td>2–3</td><td>Grafo vial y Dijkstra.</td></tr>
+    <tr><td>3–5</td><td>Alternativas, costos y factibilidad.</td></tr>
+    <tr><td>5–6</td><td>Heurísticas k/h.</td></tr>
+    <tr><td>6–7</td><td>Asignación lexicográfica y poda.</td></tr>
+    <tr><td>7–8</td><td>Simulación por etapas.</td></tr>
+    <tr><td>8–9</td><td>Resultados y comparación de escenarios.</td></tr>
+    <tr><td>9–10</td><td>Demo del mapa y cierre.</td></tr>
+  </tbody>
+</table>
+
+<h1>15. Preguntas probables</h1>
+
+<h2>¿Por qué hay 100 alternativas si solo 44 son factibles?</h2>
+<p>Porque se generan todas las combinaciones y luego se filtran por disponibilidad, reserva, complejidad, capacidad, equipamiento, rutas y destinos habilitados. Las descartadas conservan el motivo.</p>
+
+<h2>¿Qué diferencia hay entre distancia y costo?</h2>
+<p>La distancia es el recorrido vial real. El costo suma la penalización del destino. La penalización solo sirve para comparar, no altera el mapa.</p>
+
+<h2>¿Por qué el nivel 1 pierde E5?</h2>
+<p>Porque conserva solo tres ambulancias por emergencia y, al llegar a E5, esas candidatas ya fueron usadas por emergencias más prioritarias.</p>
+
+<h2>¿La solución es óptima?</h2>
+<p>Sí, dentro del conjunto evaluado. No se afirma optimalidad global del problema real porque hay restricciones no modeladas.</p>
+
+<h2>¿Por qué el nivel 2 es el recomendado?</h2>
+<p>Porque es el menor nivel que atiende las cinco emergencias y reproduce el resultado original.</p>
+
+<h2>¿La simulación usa tiempos reales?</h2>
+<p>No. La simulación del núcleo es lógica. El mapa agrega un temporizador estimado solo para la demo de liberación.</p>
+
+<h2>¿Qué pasa si una ambulancia está en uso?</h2>
+<p>No puede volver a asignarse y la urgencia asociada no se puede quitar hasta que se libere. Al liberarse, la urgencia pasa a Atendida.</p>
+
+<h1>16. Checklist antes de exponer</h1>
+
+<ul class="checklist">
+  <li>Ejecutar <code>py -m unittest discover -v</code> y confirmar 170 pruebas OK.</li>
+  <li>Ejecutar <code>py -m ambulancias_pergamino evaluar-escenarios</code> para verificar los números actuales.</li>
+  <li>Regenerar el mapa con <code>py -m ambulancias_pergamino exportar-mapa</code>.</li>
+  <li>Abrir el mapa con <code>.\abrir-mapa.cmd</code> y comprobar que responde.</li>
+  <li>Probar el visor manual: elegir ambulancia, emergencia y destino.</li>
+  <li>Probar “Poner ambulancia en uso” y verificar el panel de liberación.</li>
+  <li>Probar una urgencia nueva con “Elegir en el mapa”.</li>
+  <li>Tener a mano las tablas de resultados de esta guía.</li>
+  <li>Recordar la aclaración: datos simulados, modelo académico, no despacho real.</li>
+</ul>
+
+<div class="page-note">
+  Guía de exposición de URGENCIAS Pergamino. Los valores corresponden a los datos y a la suite de pruebas actuales. Si se modifican ambulancias, emergencias o establecimientos, conviene regenerar el mapa y volver a ejecutar la evaluación.
+</div>
+
+</body>
+</html>

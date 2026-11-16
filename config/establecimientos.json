@@ -22,7 +22,7 @@
     {
       "id": "GUARDIA-3",
       "base_id": "GUARDIA-3",
-      "habilitado_destino": true,
+      "habilitado_destino": false,
       "prioridad": 2,
       "penalizacion_metros": 1000,
       "complejidad_maxima": 2,
@@ -31,7 +31,7 @@
     {
       "id": "GUARDIA-4",
       "base_id": "GUARDIA-4",
-      "habilitado_destino": true,
+      "habilitado_destino": false,
       "prioridad": 2,
       "penalizacion_metros": 1000,
       "complejidad_maxima": 2,

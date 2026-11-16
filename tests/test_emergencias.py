@@ -152,7 +152,7 @@ class EmergenciasTest(unittest.TestCase):
         self.assertEqual(5, len(informes))
         for informe in informes:
             self.assertEqual(6, len(informe.bases_alcanzables))
-            self.assertEqual(4, len(informe.establecimientos_alcanzables))
+            self.assertEqual(2, len(informe.establecimientos_alcanzables))
             self.assertEqual([], informe.advertencias)
 
 

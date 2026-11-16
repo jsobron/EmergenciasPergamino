@@ -15,6 +15,12 @@ class Ambulancia:
     complejidad: int
     capacidad_pacientes: int
     equipamiento: list[Any]
+    nombre: str = ""
+    reserva: bool = False
+
+    @property
+    def etiqueta(self) -> str:
+        return self.nombre or self.id
 
 
 def _entero_positivo(valor: Any, campo: str, ambulancia_id: str) -> int:
@@ -35,12 +41,11 @@ def cargar_ambulancias(
     crudas = datos.get("ambulancias")
     if not isinstance(crudas, list):
         raise ValueError("ambulancias debe ser una lista")
-    if len(crudas) != 6:
-        raise ValueError("La configuración debe contener exactamente seis ambulancias")
+    if not crudas:
+        raise ValueError("La configuración debe contener al menos una ambulancia")
 
     bases_por_id = {base["id"]: base for base in bases}
     ids_vistos: set[str] = set()
-    bases_vistas: set[str] = set()
     ambulancias: list[Ambulancia] = []
 
     for cruda in crudas:
@@ -56,9 +61,6 @@ def cargar_ambulancias(
         base_id = cruda.get("base_id")
         if base_id not in bases_por_id:
             raise ValueError(f"Ambulancia {ambulancia_id}: base inexistente {base_id!r}")
-        if base_id in bases_vistas:
-            raise ValueError(f"Base {base_id}: hay más de una ambulancia asignada")
-        bases_vistas.add(base_id)
 
         disponible = cruda.get("disponible")
         if not isinstance(disponible, bool):
@@ -66,6 +68,14 @@ def cargar_ambulancias(
         equipamiento = cruda.get("equipamiento")
         if not isinstance(equipamiento, list):
             raise ValueError(f"Ambulancia {ambulancia_id}: equipamiento debe ser una lista")
+        nombre = cruda.get("nombre", ambulancia_id)
+        if not isinstance(nombre, str) or not nombre.strip():
+            raise ValueError(
+                f"Ambulancia {ambulancia_id}: nombre debe ser un texto no vacío"
+            )
+        reserva = cruda.get("reserva", False)
+        if not isinstance(reserva, bool):
+            raise ValueError(f"Ambulancia {ambulancia_id}: reserva debe ser booleano")
 
         ambulancias.append(
             Ambulancia(
@@ -82,11 +92,9 @@ def cargar_ambulancias(
                     ambulancia_id,
                 ),
                 equipamiento=equipamiento.copy(),
+                nombre=nombre.strip(),
+                reserva=reserva,
             )
         )
 
-    bases_sin_ambulancia = set(bases_por_id) - bases_vistas
-    if bases_sin_ambulancia:
-        faltantes = ", ".join(sorted(bases_sin_ambulancia))
-        raise ValueError(f"Bases sin ambulancia: {faltantes}")
     return ambulancias

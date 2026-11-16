@@ -70,10 +70,10 @@ class SimulacionTest(unittest.TestCase):
         self.assertEqual(0, resultado.paso)
         self.assertEqual("asignada", resultado.etapa)
         self.assertEqual(PASO_FINAL, resultado.total_pasos)
-        self.assertEqual(5, resultado.cantidad_atenciones)
+        self.assertEqual(4, resultado.cantidad_atenciones)
         self.assertEqual(0, resultado.cantidad_completadas)
-        self.assertEqual(0, resultado.cantidad_sin_asignar)
-        self.assertTrue(resultado.es_completa)
+        self.assertEqual(1, resultado.cantidad_sin_asignar)
+        self.assertFalse(resultado.es_completa)
         self.assertFalse(resultado.es_final)
 
         atendidas = set(self.asignacion.emergencias_atendidas)
@@ -135,7 +135,7 @@ class SimulacionTest(unittest.TestCase):
         self.assertEqual(4, resultado.paso)
         self.assertEqual("finalizada", resultado.etapa)
         self.assertTrue(resultado.es_final)
-        self.assertEqual(5, resultado.cantidad_completadas)
+        self.assertEqual(4, resultado.cantidad_completadas)
         self.assertTrue(all(atencion.completada for atencion in resultado.atenciones))
         self.assertTrue(
             all(
@@ -199,7 +199,7 @@ class SimulacionTest(unittest.TestCase):
         simulacion.avanzar()
         final = simulacion.resultado()
         self.assertTrue(final.es_final)
-        self.assertEqual(5, final.cantidad_completadas)
+        self.assertEqual(4, final.cantidad_completadas)
         for atencion in final.atenciones:
             self.assertEqual("finalizada", atencion.estado_emergencia)
             self.assertEqual("finalizada", atencion.estado_ambulancia)
@@ -224,8 +224,8 @@ class SimulacionTest(unittest.TestCase):
         resultado = simulacion.resultado()
 
         self.assertTrue(resultado.es_final)
-        self.assertEqual(5, resultado.cantidad_completadas)
-        self.assertEqual(5, resultado.cantidad_atenciones)
+        self.assertEqual(4, resultado.cantidad_completadas)
+        self.assertEqual(4, resultado.cantidad_atenciones)
         self.assertTrue(
             all(
                 ambulancia.estado == ESTADO_AMBULANCIA_FINALIZADA
@@ -416,7 +416,7 @@ class SimulacionTest(unittest.TestCase):
 
     def test_rechaza_ruta_faltante(self) -> None:
         rutas = dict(self.resultado.rutas_ambulancia_emergencia)
-        del rutas["A6|E2"]
+        del rutas["A2|E2"]
         resultado_sin_ruta = replace(
             self.resultado, rutas_ambulancia_emergencia=rutas
         )

@@ -1,7 +1,7 @@
 [project]
 name = "ambulancias-pergamino"
 version = "0.1.0"
-description = "Grafo vial y bases de ambulancias de Pergamino"
+description = "URGENCIAS Pergamino: grafo vial y asignación de ambulancias"
 requires-python = ">=3.11"
 
 [tool.setuptools]

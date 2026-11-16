@@ -36,7 +36,7 @@ class EstablecimientosTest(unittest.TestCase):
     def cargar(self):
         return cargar_establecimientos(self.guardar(), self.bases)
 
-    def test_carga_los_cuatro_destinos_enriquecidos_desde_las_bases(self) -> None:
+    def test_carga_los_cuatro_destinos_y_deja_inactivas_centro_y_general_paz(self) -> None:
         establecimientos = cargar_establecimientos(CONFIGURACION, self.bases)
 
         self.assertEqual(4, len(establecimientos))
@@ -44,7 +44,10 @@ class EstablecimientosTest(unittest.TestCase):
             ["GUARDIA-1", "GUARDIA-2", "GUARDIA-3", "GUARDIA-4"],
             [e.id for e in establecimientos],
         )
-        self.assertTrue(all(e.habilitado_destino for e in establecimientos))
+        self.assertEqual(
+            [True, True, False, False],
+            [e.habilitado_destino for e in establecimientos],
+        )
         self.assertTrue(all(e.datos_simulados for e in establecimientos))
         self.assertEqual("Hospital Interzonal San José", establecimientos[0].nombre)
         self.assertEqual("-60.5855184,-33.9115160", establecimientos[0].nodo_id)
@@ -115,10 +118,17 @@ class EstablecimientosTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "datos_simulados"):
             self.cargar()
 
-    def test_exige_exactamente_cuatro_destinos(self) -> None:
-        self.configuracion["establecimientos"].pop()
+    def test_exige_al_menos_un_destino_habilitado(self) -> None:
+        for establecimiento in self.configuracion["establecimientos"]:
+            establecimiento["habilitado_destino"] = False
 
-        with self.assertRaisesRegex(ValueError, "exactamente cuatro"):
+        with self.assertRaisesRegex(ValueError, "al menos un establecimiento"):
+            self.cargar()
+
+    def test_exige_san_jose_habilitado_como_destino(self) -> None:
+        self.configuracion["establecimientos"][0]["habilitado_destino"] = False
+
+        with self.assertRaisesRegex(ValueError, "debe estar habilitado"):
             self.cargar()
 
     def test_exige_prioridad_maxima_y_penalizacion_cero_para_san_jose(self) -> None:

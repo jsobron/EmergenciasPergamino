@@ -149,6 +149,8 @@ def _motivos_ambulancia(
     motivos: list[str] = []
     if not ambulancia.disponible:
         motivos.append("ambulancia_no_disponible")
+    if ambulancia.reserva and emergencia.gravedad < 3:
+        motivos.append("ambulancia_de_reserva_solo_gravedad_3")
     if ambulancia.complejidad < emergencia.complejidad_requerida:
         motivos.append("complejidad_ambulancia_insuficiente")
     if ambulancia.capacidad_pacientes < emergencia.cantidad_pacientes:

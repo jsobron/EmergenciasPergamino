@@ -9,9 +9,11 @@ $ProgressPreference = 'SilentlyContinue'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $root
 
+$python = if (Get-Command py -ErrorAction SilentlyContinue) { 'py' } elseif (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { throw 'No se encontro Python. Instala Python 3.11 o superior.' }
+
 $mapa = Join-Path $root 'data\mapa_pergamino.html'
 if (-not (Test-Path -LiteralPath $mapa)) {
-    & python -m ambulancias_pergamino exportar-mapa
+    & $python -m ambulancias_pergamino exportar-mapa
     if ($LASTEXITCODE -ne 0) {
         throw 'No se pudo generar el mapa.'
     }
@@ -48,7 +50,7 @@ if (-not $puertoFinal) {
 
 $servidorNuevo = $false
 if (-not (Test-MapaServer -Puerto $puertoFinal)) {
-    $servidor = Start-Process -FilePath 'python' `
+    $servidor = Start-Process -FilePath $python `
         -ArgumentList @('-m', 'http.server', "$puertoFinal", '--bind', '127.0.0.1', '--directory', 'data') `
         -WorkingDirectory $root `
         -WindowStyle Hidden `
@@ -68,7 +70,7 @@ if (-not (Test-MapaServer -Puerto $puertoFinal)) {
     }
 
     if (-not $listo) {
-        throw 'El servidor local no respondio. Revisa que python este disponible.'
+        throw 'El servidor local no respondio. Revisa que Python (py o python) este disponible.'
     }
 }
 

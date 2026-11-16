@@ -3,49 +3,51 @@
   "ambulancias": [
     {
       "id": "A1",
-      "base_id": "GUARDIA-2",
+      "nombre": "Clase C SAME 1",
+      "base_id": "SAME",
       "disponible": true,
-      "complejidad": 2,
+      "reserva": false,
+      "complejidad": 3,
       "capacidad_pacientes": 1,
       "equipamiento": []
     },
     {
       "id": "A2",
-      "base_id": "GUARDIA-3",
+      "nombre": "Clase C SAME 2",
+      "base_id": "SAME",
       "disponible": true,
-      "complejidad": 2,
+      "reserva": false,
+      "complejidad": 3,
       "capacidad_pacientes": 1,
       "equipamiento": []
     },
     {
       "id": "A3",
-      "base_id": "GUARDIA-4",
+      "nombre": "Clase C SAME RESERVA",
+      "base_id": "SAME",
       "disponible": true,
-      "complejidad": 2,
+      "reserva": true,
+      "complejidad": 3,
       "capacidad_pacientes": 1,
       "equipamiento": []
     },
     {
       "id": "A4",
-      "base_id": "GUARDIA-1",
+      "nombre": "Clase C Medicar 1",
+      "base_id": "GUARDIA-5",
       "disponible": true,
-      "complejidad": 2,
+      "reserva": false,
+      "complejidad": 3,
       "capacidad_pacientes": 1,
       "equipamiento": []
     },
     {
       "id": "A5",
+      "nombre": "Clase C Medicar 2",
       "base_id": "GUARDIA-5",
       "disponible": true,
-      "complejidad": 2,
-      "capacidad_pacientes": 1,
-      "equipamiento": []
-    },
-    {
-      "id": "A6",
-      "base_id": "SAME",
-      "disponible": true,
-      "complejidad": 2,
+      "reserva": false,
+      "complejidad": 3,
       "capacidad_pacientes": 1,
       "equipamiento": []
     }

@@ -32,13 +32,15 @@ class CliHeuristicasTest(unittest.TestCase):
         self.assertIn("Nivel de candidatos: 1", texto)
         self.assertIn("Ambulancias por emergencia (k): 3", texto)
         self.assertIn("Establecimientos por emergencia (h): 2", texto)
-        self.assertIn("Alternativas originales: 120", texto)
-        self.assertIn("Alternativas factibles: 120", texto)
-        self.assertIn("Alternativas no factibles excluidas: 0", texto)
-        self.assertIn("Alternativas tras filtrar ambulancias: 60", texto)
+        self.assertIn("Alternativas originales: 100", texto)
+        self.assertIn("Alternativas factibles: 44", texto)
+        self.assertIn("Alternativas no factibles excluidas: 56", texto)
+        self.assertIn("ambulancia_de_reserva_solo_gravedad_3: 12", texto)
+        self.assertIn("establecimiento_no_habilitado: 50", texto)
+        self.assertIn("Alternativas tras filtrar ambulancias: 30", texto)
         self.assertIn("Alternativas tras filtrar establecimientos: 30", texto)
         self.assertIn("Alternativas reducidas: 30", texto)
-        self.assertIn("Reducción: 75.0%", texto)
+        self.assertIn("Reducción: 70.0%", texto)
         posiciones = [
             texto.index(f"{indice}. {emergencia}")
             for indice, emergencia in enumerate(
@@ -55,7 +57,7 @@ class CliHeuristicasTest(unittest.TestCase):
         self.assertIn("Nivel de candidatos: 2", texto)
         self.assertIn("Ambulancias por emergencia (k): 4", texto)
         self.assertIn("Establecimientos por emergencia (h): 3", texto)
-        self.assertIn("Alternativas reducidas: 60", texto)
+        self.assertIn("Alternativas reducidas: 40", texto)
 
     def test_listar_candidatos_muestra_conservados_excluidos_y_motivos(self) -> None:
         texto = self.ejecutar(
@@ -64,16 +66,18 @@ class CliHeuristicasTest(unittest.TestCase):
         )
         self.assertIn("Emergencia E1:", texto)
         self.assertIn("Ambulancias conservadas (3):", texto)
-        self.assertIn("A1: 2667 m", texto)
-        self.assertIn("A2: 3241 m", texto)
-        self.assertIn("A3: 3385 m", texto)
-        self.assertIn("Ambulancias excluidas (3):", texto)
+        self.assertIn("A4: 3431 m", texto)
+        self.assertIn("A5: 3431 m", texto)
+        self.assertIn("A1: 3479 m", texto)
+        self.assertIn("Ambulancias excluidas (2):", texto)
         self.assertIn("fuera_de_las_k_mas_cercanas", texto)
         self.assertIn("Establecimientos conservados (2):", texto)
         self.assertIn("GUARDIA-2: criterio 3675 m", texto)
-        self.assertIn("GUARDIA-3: criterio 4141 m", texto)
+        self.assertIn("GUARDIA-1: criterio 5324 m", texto)
         self.assertIn("Establecimientos excluidos (2):", texto)
-        self.assertIn("fuera_de_los_h_mas_convenientes", texto)
+        self.assertIn("establecimiento_no_habilitado", texto)
+        self.assertIn("GUARDIA-3", texto)
+        self.assertIn("GUARDIA-4", texto)
 
     def test_listar_candidatos_sin_filtro_recorre_todas_las_emergencias(self) -> None:
         texto = self.ejecutar(
@@ -95,8 +99,8 @@ class CliHeuristicasTest(unittest.TestCase):
         ]
         self.assertEqual(6, len(lineas))
         self.assertIn("GUARDIA-2", texto)
-        self.assertIn("GUARDIA-3", texto)
-        self.assertNotIn("GUARDIA-1", texto)
+        self.assertIn("GUARDIA-1", texto)
+        self.assertNotIn("GUARDIA-3", texto)
         self.assertNotIn("GUARDIA-4", texto)
 
     def test_listar_reducidas_sin_filtro_informa_cada_emergencia(self) -> None:

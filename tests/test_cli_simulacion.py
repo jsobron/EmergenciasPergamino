@@ -38,17 +38,18 @@ class CliSimulacionTest(unittest.TestCase):
         self.assertIn("Asignación de origen: nivel 1", texto)
         self.assertIn("Etapa: 4/4 — Finalizada", texto)
         self.assertIn("Tipo: lógica por etapas (sin tiempos reales)", texto)
-        self.assertIn("Atenciones: 5", texto)
-        self.assertIn("Completadas: 5", texto)
-        self.assertIn("Costo total: 27017 m", texto)
-        self.assertIn("Distancia total: 24017 m", texto)
+        self.assertIn("Atenciones: 4", texto)
+        self.assertIn("Completadas: 4", texto)
+        self.assertIn("Costo total: 24615 m", texto)
+        self.assertIn("Distancia total: 21615 m", texto)
         self.assertIn("Penalizaciones: 3000 m", texto)
         self.assertIn(
-            "E2 -> A6 (base SAME) -> GUARDIA-3: "
-            "emergencia finalizada, ambulancia finalizada, 7569 m",
+            "E2 -> A2 (base SAME) -> GUARDIA-2: "
+            "emergencia finalizada, ambulancia finalizada, 7820 m",
             texto,
         )
         self.assertIn("E1: finalizada", texto)
+        self.assertIn("E5: sin_asignacion", texto)
         self.assertIn("A3: disponible", texto)
 
     def test_iniciar_simulacion_muestra_estado_inicial(self) -> None:
@@ -60,7 +61,8 @@ class CliSimulacionTest(unittest.TestCase):
         self.assertIn("Etapa: 0/4 — Asignada", texto)
         self.assertIn("Completadas: 0", texto)
         self.assertIn("emergencia asignada, ambulancia asignada", texto)
-        self.assertIn("A6: asignada", texto)
+        self.assertIn("A2: asignada", texto)
+        self.assertIn("E5: sin_asignacion", texto)
         self.assertIn("A3: disponible", texto)
 
     def test_listar_simulacion_muestra_detalle_y_estados(self) -> None:
@@ -94,7 +96,7 @@ class CliSimulacionTest(unittest.TestCase):
             hasta_final=True,
         )
         self.assertIn("Etapa: 4/4 — Finalizada", texto)
-        self.assertIn("Completadas: 5", texto)
+        self.assertIn("Completadas: 4", texto)
 
     def test_ver_emergencia_y_ambulancia(self) -> None:
         texto = self.ejecutar(
@@ -103,21 +105,21 @@ class CliSimulacionTest(unittest.TestCase):
             emergencia_id="E2",
         )
         self.assertIn("Emergencia E2:", texto)
-        self.assertIn("Ambulancia: A6 (base SAME, estado finalizada)", texto)
-        self.assertIn("Destino: GUARDIA-3", texto)
+        self.assertIn("Ambulancia: A2 (base SAME, estado finalizada)", texto)
+        self.assertIn("Destino: GUARDIA-2", texto)
         self.assertIn("Tramo ambulancia -> emergencia: 2445 m", texto)
-        self.assertIn("Tramo emergencia -> destino: 4124 m", texto)
-        self.assertIn("Costo: 7569 m", texto)
+        self.assertIn("Tramo emergencia -> destino: 4375 m", texto)
+        self.assertIn("Costo: 7820 m", texto)
 
         texto = self.ejecutar(
             ver_simulacion,
             ENTRADA, AMBULANCIAS, EMERGENCIAS, ESTABLECIMIENTOS,
-            ambulancia_id="A6", etapa=2,
+            ambulancia_id="A2", etapa=2,
         )
-        self.assertIn("Ambulancia A6:", texto)
+        self.assertIn("Ambulancia A2:", texto)
         self.assertIn("Estado: en_atencion", texto)
         self.assertIn("Emergencia: E2", texto)
-        self.assertIn("Destino: GUARDIA-3", texto)
+        self.assertIn("Destino: GUARDIA-2", texto)
 
     def test_rechaza_etapa_y_nivel_inexistentes(self) -> None:
         with self.assertRaisesRegex(ValueError, "Etapa de simulación inexistente"):

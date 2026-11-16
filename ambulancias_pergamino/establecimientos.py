@@ -9,7 +9,6 @@ from typing import Any
 BASE_SAN_JOSE = "GUARDIA-1"
 BASE_MEDICAR = "GUARDIA-5"
 BASE_SAME = "SAME"
-BASES_DESTINO = {"GUARDIA-1", "GUARDIA-2", "GUARDIA-3", "GUARDIA-4"}
 
 
 @dataclass(frozen=True)
@@ -129,12 +128,14 @@ def cargar_establecimientos(
         )
 
     habilitados = [e for e in establecimientos if e.habilitado_destino]
-    if len(habilitados) != 4:
-        raise ValueError("Debe haber exactamente cuatro establecimientos habilitados como destino")
-    if {e.base_id for e in habilitados} != BASES_DESTINO:
-        raise ValueError("Las cuatro bases de destino configuradas no son las esperadas")
+    if not habilitados:
+        raise ValueError("Debe haber al menos un establecimiento habilitado como destino")
 
-    san_jose = next(e for e in habilitados if e.base_id == BASE_SAN_JOSE)
+    san_jose = next(
+        (e for e in habilitados if e.base_id == BASE_SAN_JOSE), None
+    )
+    if san_jose is None:
+        raise ValueError("Hospital Interzonal San José debe estar habilitado como destino")
     if san_jose.penalizacion_metros != 0:
         raise ValueError("Hospital Interzonal San José debe tener penalización cero")
     if any(san_jose.prioridad >= e.prioridad for e in habilitados if e != san_jose):

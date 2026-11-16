@@ -16,13 +16,54 @@ class DatosMapaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         datos = json.loads((RAIZ / "data" / "pergamino.json").read_text(encoding="utf-8"))
-        cls.mapa = preparar_datos_mapa(datos, RAIZ / "config" / "ambulancias.json")
+        direcciones = json.loads(
+            (RAIZ / "data" / "direcciones.json").read_text(encoding="utf-8")
+        )
+        cls.mapa = preparar_datos_mapa(
+            datos,
+            RAIZ / "config" / "ambulancias.json",
+            direcciones=direcciones,
+        )
 
     def test_incluye_bases_ambulancias_y_rutas_dirigidas(self) -> None:
         self.assertEqual(6, len(self.mapa["bases"]))
-        self.assertEqual(6, len(self.mapa["ambulancias"]))
+        self.assertEqual(5, len(self.mapa["ambulancias"]))
         self.assertEqual(30, len(self.mapa["rutas"]))
         self.assertTrue(self.mapa["datos_simulados"])
+
+    def test_incluye_grafo_para_calcular_rutas_en_el_navegador(self) -> None:
+        grafo = self.mapa["grafo_js"]
+        self.assertGreater(len(grafo["nodos"]), 5000)
+        self.assertEqual(len(grafo["nodos"]), len(grafo["adyacencia"]))
+        nodos_clave = {base["nodo_id"] for base in self.mapa["bases"]}
+        nodos_clave.update(a["nodo_id"] for a in self.mapa["ambulancias"])
+        nodos_clave.update(e["nodo_id"] for e in self.mapa["establecimientos"])
+        nodos_clave.update(e["nodo_id"] for e in self.mapa["emergencias"])
+        self.assertEqual(nodos_clave, set(grafo["indices"]))
+        for indice in grafo["indices"].values():
+            self.assertGreaterEqual(indice, 0)
+            self.assertLess(indice, len(grafo["nodos"]))
+        for aristas in grafo["adyacencia"]:
+            for destino, distancia in aristas:
+                self.assertGreaterEqual(destino, 0)
+                self.assertLess(destino, len(grafo["nodos"]))
+                self.assertGreater(distancia, 0)
+
+    def test_incluye_indice_de_direcciones_para_buscar_por_calle(self) -> None:
+        direcciones = self.mapa["direcciones"]
+        self.assertGreater(len(direcciones), 4000)
+        for entrada in direcciones[:20]:
+            self.assertIn("calle", entrada)
+            self.assertTrue(entrada["alias"])
+            self.assertGreaterEqual(len(entrada["coords"]), 2)
+        tucuman = [
+            entrada
+            for entrada in direcciones
+            if "TUCUMAN" in entrada["alias"]
+            and entrada["par"]
+            and entrada["par"][0] <= 150 <= entrada["par"][1]
+        ]
+        self.assertTrue(tucuman)
 
     def test_incluye_los_cuatro_establecimientos_de_destino(self) -> None:
         self.assertEqual(4, len(self.mapa["establecimientos"]))
@@ -30,15 +71,23 @@ class DatosMapaTest(unittest.TestCase):
             {"GUARDIA-1", "GUARDIA-2", "GUARDIA-3", "GUARDIA-4"},
             {e["base_id"] for e in self.mapa["establecimientos"]},
         )
+        self.assertEqual(
+            {"GUARDIA-3", "GUARDIA-4"},
+            {
+                e["id"]
+                for e in self.mapa["establecimientos"]
+                if not e["habilitado_destino"]
+            },
+        )
 
     def test_incluye_las_cinco_emergencias_y_sus_gravedades(self) -> None:
         self.assertEqual(5, len(self.mapa["emergencias"]))
         self.assertEqual({1, 2, 3}, {e["gravedad"] for e in self.mapa["emergencias"]})
         self.assertTrue(all(e["datos_simulados"] for e in self.mapa["emergencias"]))
 
-    def test_incluye_alternativas_y_solo_cincuenta_rutas_reutilizables(self) -> None:
-        self.assertEqual(120, len(self.mapa["alternativas"]))
-        self.assertEqual(30, len(self.mapa["rutas_ambulancia_emergencia"]))
+    def test_incluye_alternativas_y_rutas_reutilizables(self) -> None:
+        self.assertEqual(100, len(self.mapa["alternativas"]))
+        self.assertEqual(25, len(self.mapa["rutas_ambulancia_emergencia"]))
         self.assertEqual(20, len(self.mapa["rutas_emergencia_establecimiento"]))
 
     def test_incluye_reduccion_heuristica_y_orden_de_emergencias(self) -> None:
@@ -46,7 +95,7 @@ class DatosMapaTest(unittest.TestCase):
         self.assertEqual(1, reduccion["parametros"]["nivel"])
         self.assertEqual(3, reduccion["parametros"]["k"])
         self.assertEqual(2, reduccion["parametros"]["h"])
-        self.assertEqual(120, reduccion["estadisticas"]["alternativas_originales"])
+        self.assertEqual(100, reduccion["estadisticas"]["alternativas_originales"])
         self.assertEqual(30, reduccion["estadisticas"]["alternativas_reducidas"])
         self.assertEqual(30, len(reduccion["alternativas_reducidas"]))
         self.assertEqual(
@@ -54,7 +103,7 @@ class DatosMapaTest(unittest.TestCase):
             [item["emergencia_id"] for item in reduccion["orden_emergencias"]],
         )
         self.assertEqual(
-            ["A1", "A2", "A3"],
+            ["A4", "A5", "A1"],
             [
                 candidato["ambulancia_id"]
                 for candidato in reduccion["selecciones"]["E1"]["ambulancias"]
@@ -62,7 +111,7 @@ class DatosMapaTest(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            ["GUARDIA-2", "GUARDIA-3"],
+            ["GUARDIA-2", "GUARDIA-1"],
             [
                 candidato["establecimiento_id"]
                 for candidato in reduccion["selecciones"]["E1"]["establecimientos"]
@@ -90,12 +139,17 @@ class DatosMapaTest(unittest.TestCase):
         self.assertEqual(0, len(original["emergencias_sin_asignar"]))
         self.assertTrue(original["es_completa"])
         self.assertTrue(original["es_optima"])
-        self.assertEqual(120, original["alternativas_candidatas"])
+        self.assertEqual(44, original["alternativas_candidatas"])
         for nivel in range(1, 5):
             asignacion = asignaciones[f"nivel-{nivel}"]
             self.assertEqual(nivel, asignacion["parametros"]["nivel"])
-            self.assertEqual(5, len(asignacion["emergencias_atendidas"]))
-            self.assertTrue(asignacion["es_completa"])
+            if nivel == 1:
+                self.assertEqual(4, len(asignacion["emergencias_atendidas"]))
+                self.assertEqual(["E5"], asignacion["emergencias_sin_asignar"])
+                self.assertFalse(asignacion["es_completa"])
+            else:
+                self.assertEqual(5, len(asignacion["emergencias_atendidas"]))
+                self.assertTrue(asignacion["es_completa"])
             for alternativa in asignacion["alternativas"]:
                 self.assertIn(
                     f"{alternativa['ambulancia_id']}|"
@@ -108,10 +162,10 @@ class DatosMapaTest(unittest.TestCase):
                     self.mapa["rutas_emergencia_establecimiento"],
                 )
         comparacion = self.mapa["comparacion_asignaciones"]
-        self.assertEqual(1, comparacion["nivel_recomendado"])
-        self.assertFalse(comparacion["perdida_por_heuristica"])
-        self.assertEqual([], comparacion["niveles_con_perdida"])
-        self.assertEqual({}, comparacion["diferencias"])
+        self.assertEqual(2, comparacion["nivel_recomendado"])
+        self.assertTrue(comparacion["perdida_por_heuristica"])
+        self.assertEqual([1], comparacion["niveles_con_perdida"])
+        self.assertIn(1, comparacion["diferencias"])
 
     def test_incluye_simulaciones_para_cada_asignacion(self) -> None:
         self.assertEqual(
@@ -166,21 +220,21 @@ class DatosMapaTest(unittest.TestCase):
             [metricas["nivel"] for metricas in evaluacion["escenarios"]],
         )
         self.assertEqual(
-            [120, 30, 60, 100, 120],
+            [44, 30, 40, 44, 44],
             [
                 metricas["alternativas_conservadas"]
                 for metricas in evaluacion["escenarios"]
             ],
         )
         self.assertEqual(
-            [30, 15, 20, 25, 30],
+            [22, 15, 20, 22, 22],
             [
                 metricas["alternativas_evaluadas"]
                 for metricas in evaluacion["escenarios"]
             ],
         )
         self.assertEqual(
-            [0.0, 75.0, 50.0, 16.67, 0.0],
+            [0.0, 31.82, 9.09, 0.0, 0.0],
             [
                 metricas["porcentaje_reduccion"]
                 for metricas in evaluacion["escenarios"]
@@ -234,26 +288,22 @@ class DatosMapaTest(unittest.TestCase):
                     final["ambulancias"][ambulancia_id]["estado"], estado
                 )
 
-        self.assertEqual(1, evaluacion["nivel_recomendado"])
-        self.assertFalse(evaluacion["perdida_por_heuristica"])
-        self.assertEqual([], evaluacion["niveles_con_perdida"])
-        self.assertTrue(evaluacion["todos_mismos_resultados"])
-        self.assertTrue(evaluacion["todos_mismos_costos"])
+        self.assertEqual(2, evaluacion["nivel_recomendado"])
+        self.assertTrue(evaluacion["perdida_por_heuristica"])
+        self.assertEqual([1], evaluacion["niveles_con_perdida"])
+        self.assertFalse(evaluacion["todos_mismos_resultados"])
+        self.assertFalse(evaluacion["todos_mismos_costos"])
 
     def test_simulacion_conserva_tramos_costos_y_estados(self) -> None:
         simulacion = self.mapa["simulaciones"]["nivel-1"]
         asignacion = self.mapa["asignaciones"]["nivel-1"]
 
-        self.assertEqual(5, simulacion["cantidad_atenciones"])
-        self.assertEqual(5, simulacion["cantidad_completadas"])
-        self.assertEqual(0, simulacion["cantidad_sin_asignar"])
-        self.assertTrue(simulacion["es_completa"])
-        self.assertAlmostEqual(
-            27017.174000000003, simulacion["costo_total"]
-        )
-        self.assertAlmostEqual(
-            24017.174000000003, simulacion["distancia_total"]
-        )
+        self.assertEqual(4, simulacion["cantidad_atenciones"])
+        self.assertEqual(4, simulacion["cantidad_completadas"])
+        self.assertEqual(1, simulacion["cantidad_sin_asignar"])
+        self.assertFalse(simulacion["es_completa"])
+        self.assertAlmostEqual(24615.3, simulacion["costo_total"])
+        self.assertAlmostEqual(21615.3, simulacion["distancia_total"])
         self.assertAlmostEqual(3000.0, simulacion["penalizacion_total"])
 
         for atencion in simulacion["atenciones"]:
@@ -393,10 +443,18 @@ class DatosMapaTest(unittest.TestCase):
         )
         self.assertIn('L.DomUtil.create("div", "leyenda")', html)
         self.assertIn("Destino prioritario", html)
+        self.assertIn("Destino inactivo", html)
+        self.assertIn("destinoHabilitado", html)
         self.assertIn("No recibe pacientes", html)
         self.assertIn("emergencia-icon", html)
-        self.assertIn("Emergencias simuladas", html)
+        self.assertIn("Gravedad de emergencias", html)
         self.assertIn("Gravedad alta/crítica", html)
+        self.assertNotIn("Emergencias simuladas", html)
+        self.assertNotIn("6 bases", html)
+        self.assertNotIn("rutas dirigidas", html)
+        self.assertNotIn("Datos simulados", html)
+        self.assertNotIn('id="origen"', html)
+        self.assertNotIn('id="destino"', html)
         self.assertIn("Complejidad requerida", html)
         self.assertIn('id="alternativa-ambulancia"', html)
         self.assertIn('id="alternativa-emergencia"', html)
@@ -404,34 +462,64 @@ class DatosMapaTest(unittest.TestCase):
         self.assertIn("Distancia física total", html)
         self.assertIn("Tramo ambulancia → emergencia", html)
         self.assertIn("Tramo emergencia → establecimiento", html)
-        self.assertIn('id="heuristica-emergencia"', html)
-        self.assertIn('id="heuristica-alternativa"', html)
-        self.assertIn('id="resultado-heuristica"', html)
-        self.assertIn("Reducción de candidatos", html)
-        self.assertIn("Ambulancia conservada", html)
-        self.assertIn("Ambulancia descartada", html)
-        self.assertIn("Establecimiento conservado", html)
-        self.assertIn("Establecimiento excluido", html)
-        self.assertIn("alternativasReducidasPorEmergencia", html)
-        self.assertIn("datos.reduccion", html)
-        self.assertIn('id="asignacion-conjunto"', html)
-        self.assertIn('id="resultado-asignacion"', html)
-        self.assertIn("Asignación global — Etapa 7", html)
-        self.assertIn("Alternativas originales", html)
-        self.assertIn("Nivel ${nivel} (recomendado)", html)
-        self.assertIn("Emergencia atendida", html)
-        self.assertIn("Emergencia sin asignar", html)
-        self.assertIn("Ambulancia utilizada", html)
-        self.assertIn("Establecimiento elegido", html)
-        self.assertIn("datos.asignaciones", html)
-        self.assertIn("datos.comparacion_asignaciones", html)
-        self.assertIn("capaAsignacionRutas", html)
-        self.assertIn("aplicarAsignacion", html)
-        self.assertIn("Óptima dentro del conjunto", html)
-        self.assertIn("Nivel recomendado", html)
-        self.assertIn("Niveles con pérdida", html)
+        self.assertIn("panel-inferior", html)
+        self.assertIn("Liberación de ambulancias", html)
+        self.assertIn("Urgencias y grados", html)
+        self.assertIn('id="alternativa-asignar"', html)
+        self.assertIn('id="resultado-despacho"', html)
+        self.assertIn('id="dashboard-resumen"', html)
+        self.assertIn('id="dashboard-lista"', html)
+        self.assertIn('id="form-urgencia"', html)
+        self.assertIn('id="urgencia-id"', html)
+        self.assertIn('id="urgencia-gravedad"', html)
+        self.assertIn('id="urgencia-calle"', html)
+        self.assertIn('id="urgencia-numero"', html)
+        self.assertIn('id="urgencia-buscar"', html)
+        self.assertIn('id="urgencia-elegir-mapa"', html)
+        self.assertIn('id="resultado-urgencia"', html)
+        self.assertIn('id="resultados-direccion"', html)
+        self.assertIn('id="lista-urgencias"', html)
+        self.assertNotIn('id="urgencia-latitud"', html)
+        self.assertNotIn('id="urgencia-longitud"', html)
+        self.assertIn("Buscar dirección", html)
+        self.assertIn("normalizarCalle", html)
+        self.assertIn("buscarDirecciones", html)
+        self.assertIn("coordenadaEnBloque", html)
+        self.assertIn("bloquesPorCalle", html)
+        self.assertIn("datos.direcciones", html)
+        self.assertIn("grafo_js", html)
+        self.assertIn("nodoMasCercano", html)
+        self.assertIn("caminoMinimo", html)
+        self.assertIn("MonticuloMinimo", html)
+        self.assertIn("coordenadasCamino", html)
+        self.assertIn("tiempoHastaDisponible", html)
+        self.assertIn("VELOCIDAD_KMH = 40", html)
+        self.assertIn("TIEMPO_ATENCION_MIN = 10", html)
+        self.assertIn("data-liberar", html)
+        self.assertIn("liberacionEn", html)
+        self.assertIn("liberarVencidos", html)
+        self.assertIn("actualizarLiberaciones", html)
+        self.assertIn("setInterval(actualizarLiberaciones", html)
+        self.assertIn("liberación automática", html)
+        self.assertIn("const atendidas = new Map()", html)
+        self.assertIn("registrarAtendida", html)
+        self.assertIn("refrescarSelectores", html)
+        self.assertIn("prepararSiguienteDespacho", html)
+        self.assertIn("estadoUrgencia", html)
+        self.assertIn("Atendida por", html)
+        self.assertIn("data-quitar-urgencia", html)
+        self.assertIn(
+            "No se puede quitar mientras la ambulancia está en uso", html
+        )
+        self.assertIn(
+            "No se puede quitar una urgencia con la ambulancia en uso.", html
+        )
+        self.assertIn("agregarUrgencia", html)
+        self.assertIn("renderUrgencias", html)
+        self.assertIn("Disponible en", html)
+        self.assertIn("regreso a la base", html)
 
-    def test_exporta_controles_de_simulacion(self) -> None:
+    def test_mapa_no_expone_paneles_de_etapas_6_a_9(self) -> None:
         with tempfile.TemporaryDirectory() as directorio:
             salida = Path(directorio) / "mapa.html"
             exportar_mapa(
@@ -441,45 +529,23 @@ class DatosMapaTest(unittest.TestCase):
             )
             html = salida.read_text(encoding="utf-8")
 
-        self.assertIn("Simulación — Etapa 8", html)
-        self.assertIn('id="simulacion-etapa"', html)
-        self.assertIn('id="simulacion-emergencia"', html)
-        self.assertIn('id="resultado-simulacion"', html)
-        self.assertIn("Etapa lógica", html)
-        self.assertIn("Todas las emergencias", html)
-        self.assertIn("datos.simulaciones", html)
-        self.assertIn("datos.etapas_simulacion", html)
-        self.assertIn("selectorSimulacionEtapa", html)
-        self.assertIn("selectorSimulacionEmergencia", html)
-        self.assertIn("aplicarAsignacion", html)
-        self.assertIn("estiloTramo", html)
-        self.assertIn("Emergencia seleccionada", html)
-        self.assertIn("Estado de emergencias", html)
-        self.assertIn("Estado de ambulancias", html)
-        self.assertIn("lógica por etapas, sin tiempos reales", html)
-        self.assertIn("Penalizaciones", html)
-
-    def test_exporta_panel_de_evaluacion(self) -> None:
-        with tempfile.TemporaryDirectory() as directorio:
-            salida = Path(directorio) / "mapa.html"
-            exportar_mapa(
-                RAIZ / "data" / "pergamino.json",
-                RAIZ / "config" / "ambulancias.json",
-                salida,
-            )
-            html = salida.read_text(encoding="utf-8")
-
-        self.assertIn("Evaluación comparativa — Etapa 9", html)
-        self.assertIn('id="resultado-evaluacion"', html)
-        self.assertIn("datos.evaluacion", html)
-        self.assertIn("mostrarEvaluacion", html)
-        self.assertIn("tabla-evaluacion", html)
-        self.assertIn("Conservadas / generadas", html)
-        self.assertIn("Reducción", html)
-        self.assertIn("Nivel recomendado", html)
-        self.assertIn("mismos resultados", html)
-        self.assertIn("mismos costos", html)
-        self.assertIn("barra-reduccion", html)
+        for texto in (
+            "Reducción de candidatos",
+            "Asignación global",
+            "Simulación — Etapa 8",
+            "Evaluación comparativa",
+            'id="heuristica-emergencia"',
+            'id="asignacion-conjunto"',
+            'id="simulacion-etapa"',
+            'id="resultado-evaluacion"',
+            "datos.reduccion",
+            "datos.asignaciones",
+            "datos.simulaciones",
+            "datos.evaluacion",
+            "mostrarEvaluacion",
+            "aplicarAsignacion",
+        ):
+            self.assertNotIn(texto, html)
 
     def test_javascript_generado_tiene_sintaxis_valida(self) -> None:
         node = shutil.which("node")

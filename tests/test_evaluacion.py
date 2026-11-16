@@ -71,23 +71,23 @@ class EvaluacionTest(unittest.TestCase):
 
     def test_metricas_de_reduccion_coinciden_con_los_niveles(self) -> None:
         self.assertEqual(
-            [120, 120, 120, 120, 120],
+            [100, 100, 100, 100, 100],
             [metricas.alternativas_generadas for metricas in self.evaluacion.escenarios],
         )
         self.assertEqual(
-            [120, 120, 120, 120, 120],
+            [44, 44, 44, 44, 44],
             [metricas.alternativas_factibles for metricas in self.evaluacion.escenarios],
         )
         self.assertEqual(
-            [120, 30, 60, 100, 120],
+            [44, 30, 40, 44, 44],
             [metricas.alternativas_conservadas for metricas in self.evaluacion.escenarios],
         )
         self.assertEqual(
-            [30, 15, 20, 25, 30],
+            [22, 15, 20, 22, 22],
             [metricas.alternativas_evaluadas for metricas in self.evaluacion.escenarios],
         )
         self.assertEqual(
-            [0.0, 75.0, 50.0, 16.67, 0.0],
+            [0.0, 31.82, 9.09, 0.0, 0.0],
             [metricas.porcentaje_reduccion for metricas in self.evaluacion.escenarios],
         )
 
@@ -164,47 +164,88 @@ class EvaluacionTest(unittest.TestCase):
 
     def test_asignaciones_y_diferencias_respecto_del_original(self) -> None:
         esperadas = {
-            "E2": ("A6", "GUARDIA-3"),
+            "E2": ("A3", "GUARDIA-2"),
             "E1": ("A1", "GUARDIA-2"),
-            "E3": ("A2", "GUARDIA-3"),
-            "E4": ("A4", "GUARDIA-1"),
-            "E5": ("A5", "GUARDIA-1"),
+            "E3": ("A4", "GUARDIA-2"),
+            "E4": ("A5", "GUARDIA-1"),
+            "E5": ("A2", "GUARDIA-1"),
         }
-        for metricas in self.evaluacion.escenarios:
-            obtenidas = {
+        original = self.evaluacion.original
+        obtenidas = {
+            asignacion.emergencia_id: (
+                asignacion.ambulancia_id,
+                asignacion.establecimiento_id,
+            )
+            for asignacion in original.asignaciones
+        }
+        self.assertEqual(esperadas, obtenidas)
+        self.assertEqual((), original.diferencias_respecto_original)
+
+        for metricas in self.evaluacion.niveles[1:]:
+            self.assertEqual(esperadas, {
                 asignacion.emergencia_id: (
                     asignacion.ambulancia_id,
                     asignacion.establecimiento_id,
                 )
                 for asignacion in metricas.asignaciones
-            }
-            self.assertEqual(esperadas, obtenidas)
+            })
             self.assertEqual((), metricas.diferencias_respecto_original)
-        self.assertTrue(self.evaluacion.todos_mismos_resultados)
-        self.assertTrue(self.evaluacion.todos_mismos_costos)
-        self.assertEqual(1, self.evaluacion.nivel_recomendado)
-        self.assertFalse(self.evaluacion.perdida_por_heuristica)
-        self.assertEqual((), self.evaluacion.niveles_con_perdida)
+
+        nivel1 = self.evaluacion.niveles[0]
+        self.assertEqual(4, len(nivel1.asignaciones))
+        self.assertEqual(2, len(nivel1.diferencias_respecto_original))
+        self.assertEqual(
+            ["cambiada", "sin_asignar_en_escenario"],
+            [diferencia.tipo for diferencia in nivel1.diferencias_respecto_original],
+        )
+        self.assertFalse(self.evaluacion.todos_mismos_resultados)
+        self.assertFalse(self.evaluacion.todos_mismos_costos)
+        self.assertEqual(2, self.evaluacion.nivel_recomendado)
+        self.assertTrue(self.evaluacion.perdida_por_heuristica)
+        self.assertEqual((1,), self.evaluacion.niveles_con_perdida)
 
     def test_estados_finales_de_la_simulacion(self) -> None:
-        for metricas in self.evaluacion.escenarios:
+        original = self.evaluacion.original
+        self.assertEqual(5, original.emergencias_atendidas)
+        self.assertEqual(0, original.emergencias_sin_asignar)
+        self.assertEqual(5, original.cantidad_completadas)
+        self.assertTrue(original.es_completa)
+        self.assertTrue(original.es_optima)
+        self.assertEqual(
+            {"finalizada"},
+            set(original.estados_finales_emergencias.values()),
+        )
+        self.assertEqual(
+            {"finalizada"},
+            set(original.estados_finales_ambulancias.values()),
+        )
+
+        nivel1 = self.evaluacion.niveles[0]
+        self.assertEqual(4, nivel1.emergencias_atendidas)
+        self.assertEqual(1, nivel1.emergencias_sin_asignar)
+        self.assertEqual(4, nivel1.cantidad_completadas)
+        self.assertFalse(nivel1.es_completa)
+        self.assertEqual(
+            "disponible", nivel1.estados_finales_ambulancias["A3"]
+        )
+        self.assertEqual(
+            {"finalizada", "sin_asignacion"},
+            set(nivel1.estados_finales_emergencias.values()),
+        )
+
+        for metricas in self.evaluacion.niveles[1:]:
             self.assertEqual(5, metricas.emergencias_atendidas)
             self.assertEqual(0, metricas.emergencias_sin_asignar)
             self.assertEqual(5, metricas.cantidad_completadas)
             self.assertTrue(metricas.es_completa)
-            self.assertTrue(metricas.es_optima)
             self.assertEqual(
                 {"finalizada"},
                 set(metricas.estados_finales_emergencias.values()),
             )
             self.assertEqual(
-                "disponible",
-                metricas.estados_finales_ambulancias["A3"],
+                {"finalizada"},
+                set(metricas.estados_finales_ambulancias.values()),
             )
-            for ambulancia_id, estado in metricas.estados_finales_ambulancias.items():
-                if ambulancia_id == "A3":
-                    continue
-                self.assertEqual("finalizada", estado)
 
     def test_evaluacion_es_determinista_y_no_muta_los_datos(self) -> None:
         antes = {

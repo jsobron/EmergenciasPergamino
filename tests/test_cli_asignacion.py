@@ -26,7 +26,7 @@ class CliAsignacionTest(unittest.TestCase):
             funcion(*argumentos)
         return salida.getvalue()
 
-    def test_resumen_nivel1_informa_asignacion_completa(self) -> None:
+    def test_resumen_nivel1_informa_cobertura_parcial(self) -> None:
         texto = self.ejecutar(
             resumir_asignacion,
             ENTRADA, AMBULANCIAS, EMERGENCIAS, ESTABLECIMIENTOS,
@@ -36,23 +36,24 @@ class CliAsignacionTest(unittest.TestCase):
         self.assertIn("Conjunto de alternativas: nivel 1 (k=3, h=2)", texto)
         self.assertIn("Alternativas candidatas: 30", texto)
         self.assertIn("Alternativas evaluadas tras dominancia: 15", texto)
-        self.assertIn("Emergencias atendidas: 5", texto)
-        self.assertIn("Emergencias sin asignar: 0", texto)
-        self.assertIn("Asignación completa: sí", texto)
+        self.assertIn("Emergencias atendidas: 4", texto)
+        self.assertIn("Emergencias sin asignar: 1", texto)
+        self.assertIn("Asignación completa: no", texto)
         self.assertIn("Óptima dentro del conjunto: sí", texto)
-        self.assertIn("Costo total: 27017 m", texto)
-        self.assertIn("Ambulancias utilizadas: A1, A2, A4, A5, A6", texto)
+        self.assertIn("Costo total: 24615 m", texto)
+        self.assertIn("Ambulancias utilizadas: A1, A2, A4, A5", texto)
         self.assertIn(
-            "Establecimientos seleccionados: "
-            "GUARDIA-1, GUARDIA-2, GUARDIA-3",
+            "Establecimientos seleccionados: GUARDIA-1, GUARDIA-2",
             texto,
         )
         self.assertIn(
-            "Emergencias atendidas (orden de prioridad): E2, E1, E3, E4, E5",
+            "Emergencias atendidas (orden de prioridad): E2, E1, E3, E4",
             texto,
         )
-        self.assertIn("E2 -> A6 -> GUARDIA-3 (7569 m)", texto)
-        self.assertIn("Emergencias sin asignar: ninguna", texto)
+        self.assertIn("E2 -> A2 -> GUARDIA-2 (7820 m)", texto)
+        self.assertIn(
+            "E5: ambulancias_candidatas_ya_utilizadas", texto
+        )
 
     def test_resumen_original_usa_todas_las_alternativas(self) -> None:
         texto = self.ejecutar(
@@ -62,8 +63,8 @@ class CliAsignacionTest(unittest.TestCase):
         )
 
         self.assertIn("Conjunto de alternativas: original", texto)
-        self.assertIn("Alternativas candidatas: 120", texto)
-        self.assertIn("Alternativas evaluadas tras dominancia: 30", texto)
+        self.assertIn("Alternativas candidatas: 44", texto)
+        self.assertIn("Alternativas evaluadas tras dominancia: 22", texto)
         self.assertIn("Asignación completa: sí", texto)
 
     def test_listar_asignacion_muestra_detalle_y_sin_asignar(self) -> None:
@@ -77,9 +78,9 @@ class CliAsignacionTest(unittest.TestCase):
         )
         self.assertIn("Emergencia  Ambulancia  Establecimiento", texto)
         self.assertIn("E2", texto)
-        self.assertIn("A6", texto)
-        self.assertIn("GUARDIA-3", texto)
-        self.assertIn("Emergencias sin asignar: ninguna", texto)
+        self.assertIn("A2", texto)
+        self.assertIn("GUARDIA-2", texto)
+        self.assertIn("E5: ambulancias_candidatas_ya_utilizadas", texto)
 
     def test_listar_asignacion_original(self) -> None:
         texto = self.ejecutar(
@@ -98,23 +99,23 @@ class CliAsignacionTest(unittest.TestCase):
         )
 
         self.assertIn("Conjunto original:", texto)
-        self.assertIn("Alternativas candidatas: 120", texto)
+        self.assertIn("Alternativas candidatas: 44", texto)
         for nivel, k, h, candidatas in (
             (1, 3, 2, 30),
-            (2, 4, 3, 60),
-            (3, 5, 4, 100),
-            (4, 6, 4, 120),
+            (2, 4, 3, 40),
+            (3, 5, 4, 44),
+            (4, 6, 4, 44),
         ):
             self.assertIn(f"Nivel {nivel} (k={k}, h={h}):", texto)
             self.assertIn(f"Alternativas candidatas: {candidatas}", texto)
-        self.assertIn("Mejor nivel reducido: 1", texto)
+        self.assertIn("Mejor nivel reducido: 2", texto)
         self.assertIn(
-            "¿Alguna heurística perdió optimalidad frente al original?: no",
+            "¿Alguna heurística perdió optimalidad frente al original?: sí",
             texto,
         )
-        self.assertIn("Niveles con pérdida: ninguno", texto)
+        self.assertIn("Niveles con pérdida: 1", texto)
         self.assertIn(
-            "Todos los niveles alcanzan la misma solución que el conjunto original.",
+            "Nivel 1: atiende 4 emergencias; el conjunto original atiende 5",
             texto,
         )
 

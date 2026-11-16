@@ -35,17 +35,16 @@ class CliEvaluacionTest(unittest.TestCase):
         self.assertIn("Factibles", texto)
         self.assertIn("Conservadas", texto)
         self.assertIn("Evaluadas", texto)
-        self.assertIn("75.00 %", texto)
-        self.assertIn("50.00 %", texto)
-        self.assertIn("16.67 %", texto)
-        self.assertIn("27017 m", texto)
-        self.assertIn("24017 m", texto)
+        self.assertIn("31.82 %", texto)
+        self.assertIn("9.09 %", texto)
+        self.assertIn("32231 m", texto)
+        self.assertIn("29231 m", texto)
         self.assertIn("3000 m", texto)
-        self.assertIn("E2 -> A6 (base SAME) -> GUARDIA-3: 7569 m", texto)
-        self.assertIn("Nivel recomendado: 1", texto)
-        self.assertIn("Pérdida por heurística: no", texto)
-        self.assertIn("Mismos resultados de asignación: sí", texto)
-        self.assertIn("Mismos costos: sí", texto)
+        self.assertIn("E2 -> A3 (base SAME) -> GUARDIA-2: 7820 m", texto)
+        self.assertIn("Nivel recomendado: 2", texto)
+        self.assertIn("Pérdida por heurística: sí", texto)
+        self.assertIn("Mismos resultados de asignación: no", texto)
+        self.assertIn("Mismos costos: no", texto)
 
     def test_evaluar_escenarios_informa_estados_finales(self) -> None:
         texto = self.ejecutar(
@@ -59,12 +58,26 @@ class CliEvaluacionTest(unittest.TestCase):
             texto,
         )
         self.assertIn(
+            "Ambulancias: A1=finalizada, A2=finalizada, A3=finalizada, "
+            "A4=finalizada, A5=finalizada",
+            texto,
+        )
+        self.assertIn(
+            "Emergencias: E1=finalizada, E2=finalizada, E3=finalizada, "
+            "E4=finalizada, E5=sin_asignacion",
+            texto,
+        )
+        self.assertIn(
             "Ambulancias: A1=finalizada, A2=finalizada, A3=disponible, "
-            "A4=finalizada, A5=finalizada, A6=finalizada",
+            "A4=finalizada, A5=finalizada",
             texto,
         )
         self.assertIn(
             "Sin diferencias de asignación respecto del original.", texto
+        )
+        self.assertIn(
+            "E5: A2 -> GUARDIA-1 -> sin asignación (sin_asignar_en_escenario)",
+            texto,
         )
 
     def test_comando_disponible_y_conserva_los_anteriores(self) -> None:

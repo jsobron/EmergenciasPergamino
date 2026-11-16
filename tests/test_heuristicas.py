@@ -108,18 +108,24 @@ class HeuristicasTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "h debe ser"):
             ParametrosCandidatos(nivel=1, k=3, h=-1)
 
-    def test_reduccion_inicial_120_a_30_y_75_por_ciento(self) -> None:
+    def test_reduccion_inicial_100_a_30_y_70_por_ciento(self) -> None:
         estadisticas = self.reduccion.estadisticas
-        self.assertEqual(120, estadisticas.alternativas_originales)
-        self.assertEqual(120, estadisticas.alternativas_factibles)
-        self.assertEqual(0, estadisticas.alternativas_no_factibles)
-        self.assertEqual({}, estadisticas.motivos_no_factibles)
-        self.assertEqual(60, estadisticas.alternativas_tras_ambulancias)
+        self.assertEqual(100, estadisticas.alternativas_originales)
+        self.assertEqual(44, estadisticas.alternativas_factibles)
+        self.assertEqual(56, estadisticas.alternativas_no_factibles)
+        self.assertEqual(
+            {
+                "ambulancia_de_reserva_solo_gravedad_3": 12,
+                "establecimiento_no_habilitado": 50,
+            },
+            estadisticas.motivos_no_factibles,
+        )
+        self.assertEqual(30, estadisticas.alternativas_tras_ambulancias)
         self.assertEqual(30, estadisticas.alternativas_tras_establecimientos)
         self.assertEqual(30, estadisticas.alternativas_reducidas)
-        self.assertEqual(60, estadisticas.descartadas_por_ambulancias)
-        self.assertEqual(30, estadisticas.descartadas_por_establecimientos)
-        self.assertAlmostEqual(75.0, estadisticas.porcentaje_reduccion)
+        self.assertEqual(14, estadisticas.descartadas_por_ambulancias)
+        self.assertEqual(0, estadisticas.descartadas_por_establecimientos)
+        self.assertAlmostEqual(70.0, estadisticas.porcentaje_reduccion)
         self.assertEqual(30, len(self.reduccion.alternativas_reducidas))
 
     def test_excluye_alternativas_no_factibles(self) -> None:
@@ -148,12 +154,16 @@ class HeuristicasTest(unittest.TestCase):
         reduccion = reducir_alternativas(
             resultado, self.ambulancias, self.emergencias, self.establecimientos
         )
-        self.assertEqual(1, reduccion.estadisticas.alternativas_no_factibles)
+        self.assertEqual(57, reduccion.estadisticas.alternativas_no_factibles)
         self.assertEqual(
-            {"prueba_no_factible": 1},
+            {
+                "ambulancia_de_reserva_solo_gravedad_3": 12,
+                "establecimiento_no_habilitado": 50,
+                "prueba_no_factible": 1,
+            },
             reduccion.estadisticas.motivos_no_factibles,
         )
-        self.assertEqual(119, reduccion.estadisticas.alternativas_factibles)
+        self.assertEqual(43, reduccion.estadisticas.alternativas_factibles)
         self.assertEqual(29, reduccion.estadisticas.alternativas_reducidas)
         self.assertNotIn(
             clave,
@@ -170,7 +180,7 @@ class HeuristicasTest(unittest.TestCase):
     def test_conserva_las_tres_ambulancias_mas_cercanas(self) -> None:
         seleccion = self.reduccion.selecciones["E1"]
         self.assertEqual(
-            ["A1", "A2", "A3"],
+            ["A4", "A5", "A1"],
             [c.ambulancia_id for c in seleccion.ambulancias_conservadas],
         )
         distancias = [c.distancia_m for c in seleccion.ambulancias_conservadas]
@@ -182,7 +192,7 @@ class HeuristicasTest(unittest.TestCase):
             c.ambulancia_id: c.motivos_exclusion
             for c in seleccion.ambulancias_excluidas
         }
-        self.assertEqual({"A4", "A5", "A6"}, set(excluidas))
+        self.assertEqual({"A2", "A3"}, set(excluidas))
         for motivos in excluidas.values():
             self.assertEqual([MOTIVO_FUERA_DE_K], motivos)
 
@@ -264,7 +274,7 @@ class HeuristicasTest(unittest.TestCase):
     def test_conserva_los_dos_establecimientos_mas_convenientes(self) -> None:
         seleccion = self.reduccion.selecciones["E1"]
         self.assertEqual(
-            ["GUARDIA-2", "GUARDIA-3"],
+            ["GUARDIA-2", "GUARDIA-1"],
             [
                 c.establecimiento_id
                 for c in seleccion.establecimientos_conservados
@@ -448,7 +458,9 @@ class HeuristicasTest(unittest.TestCase):
         self.assertEqual(["E1", "E2"], [item.emergencia_id for item in orden])
 
     def test_sin_candidatos_no_falla_y_no_reduce_a_la_fuerza(self) -> None:
-        emergencia = replace(self.emergencias[0], complejidad_requerida=3)
+        emergencia = replace(
+            self.emergencias[0], equipamiento_requerido=["DEA"]
+        )
         reduccion = reducir_alternativas(
             self.resultado,
             self.ambulancias,
@@ -457,7 +469,7 @@ class HeuristicasTest(unittest.TestCase):
         )
         seleccion = reduccion.selecciones["E1"]
         self.assertEqual([], seleccion.ambulancias_conservadas)
-        self.assertEqual(6, len(seleccion.ambulancias_excluidas))
+        self.assertEqual(5, len(seleccion.ambulancias_excluidas))
         self.assertEqual(0, reduccion.estadisticas.alternativas_reducidas)
         self.assertEqual(0, reduccion.orden_emergencias[0].ambulancias_compatibles)
 
@@ -486,9 +498,9 @@ class HeuristicasTest(unittest.TestCase):
 
     def test_niveles_de_expansion_configurables(self) -> None:
         esperados = {
-            2: (80, 60),
-            3: (100, 100),
-            4: (120, 120),
+            2: (40, 40),
+            3: (44, 44),
+            4: (44, 44),
         }
         for nivel, (tras_ambulancias, reducidas) in esperados.items():
             with self.subTest(nivel=nivel):

@@ -1,8 +1,8 @@
-# EmergenciasPergamino
+# URGENCIAS Pergamino
 
 ## Presentacion
 
-**EmergenciasPergamino** es un proyecto academico que modela el problema de
+**URGENCIAS Pergamino** es un proyecto academico que modela el problema de
 asignar ambulancias y establecimientos de destino a un conjunto de emergencias
 urbanas en la ciudad de Pergamino.
 
@@ -93,7 +93,9 @@ La penalizacion no modifica el grafo ni las distancias viales. Se usa solamente
 para comparar destinos. Una alternativa es factible cuando la ambulancia esta
 disponible, tiene complejidad, capacidad y equipamiento suficientes, existe
 ruta hasta la emergencia, el establecimiento esta habilitado, tiene complejidad
-suficiente y existe ruta hasta el destino.
+suficiente y existe ruta hasta el destino. Si la ambulancia es de reserva,
+tambien se exige que la emergencia tenga gravedad 3; en caso contrario se
+registra el motivo `ambulancia_de_reserva_solo_gravedad_3`.
 
 ### Heuristicas
 
@@ -151,9 +153,11 @@ asignacion de la Etapa 7.
 ### CLI y mapa interactivo
 
 La CLI permite construir el grafo, inspeccionar datos, ejecutar alternativas,
-heuristicas, asignaciones, simulaciones y la evaluacion final. El mapa HTML
-embebe los datos y permite visualizar rutas, alternativas, reduccion de
-candidatos, asignaciones, simulacion por etapas y la comparacion de escenarios.
+heuristicas, asignaciones, simulaciones y la evaluacion final. El mapa HTML se
+concentra en la parte manual: permite visualizar alternativas
+ambulancia-emergencia-establecimiento y, debajo del mapa, un cuadro de liberacion
+de ambulancias en uso y otro para agregar urgencias con su grado. Los paneles de
+las etapas 6 a 9 ya no se muestran en el mapa.
 
 ## Funcionamiento
 
@@ -168,16 +172,27 @@ guarda el resumen, el grafo y las bases de ambulancias.
 
 ### 2. Incorporacion de bases y ambulancias
 
-`config/ambulancias.json` define una ambulancia simulada por base. El cargador
-valida IDs, bases, disponibilidad, complejidad, capacidad y equipamiento, y
-obtiene el nodo inicial desde la base correspondiente.
+La flota simulada se compone de cinco ambulancias Clase C (complejidad 3), todas
+con capacidad para un paciente y sin equipamiento adicional:
+
+- tres en la base SAME Pergamino: `Clase C SAME 1`, `Clase C SAME 2` y
+  `Clase C SAME RESERVA`;
+- dos en la base Medicar: `Clase C Medicar 1` y `Clase C Medicar 2`.
+
+`config/ambulancias.json` permite varias ambulancias por base. El cargador
+valida IDs, bases, disponibilidad, complejidad, capacidad, equipamiento, nombre
+y la marca de reserva, y obtiene el nodo inicial desde la base correspondiente.
+La ambulancia de reserva solo puede asignarse a emergencias de gravedad 3.
 
 ### 3. Definicion de destinos y prioridades
 
-`config/establecimientos.json` habilita cuatro destinos. El Hospital Interzonal
-San Jose tiene prioridad 1 y penalizacion 0; las clinicas tienen prioridad 2 y
-una penalizacion simulada de 1000 metros. Medicar y SAME funcionan como bases de
-ambulancias, pero no reciben pacientes.
+`config/establecimientos.json` define cuatro establecimientos, pero solo dos
+estan habilitados como destino: el Hospital Interzonal San Jose (prioridad 1,
+penalizacion 0) y la Clinica Pergamino (prioridad 2, penalizacion simulada de
+1000 metros). La Clinica Centro (GUARDIA-3) y la Clinica General Paz
+(GUARDIA-4) quedan inactivas: no reciben ambulancias ni se ofrecen en el
+selector de destino. Medicar y SAME funcionan como bases de ambulancias, pero no
+reciben pacientes.
 
 ### 4. Modelado de emergencias
 
@@ -187,14 +202,19 @@ vincula con su nodo vial mas cercano y conserva la distancia al nodo.
 
 ### 5. Construccion de alternativas
 
-Con los datos actuales se generan 120 alternativas:
+Con los datos actuales se generan 100 alternativas:
 
 ```text
-6 ambulancias x 5 emergencias x 4 destinos = 120
+5 ambulancias x 5 emergencias x 4 destinos = 100
 ```
 
-Las 120 combinaciones reutilizan 50 rutas: 30 de ambulancia a emergencia y 20 de
-emergencia a establecimiento.
+De ellas, 44 son factibles y 56 se descartan: 50 corresponden a los destinos
+inactivos GUARDIA-3 y GUARDIA-4, y 12 a la ambulancia de reserva, que solo puede
+atender emergencias de gravedad 3 (6 combinaciones acumulan ambos motivos). Las
+combinaciones conservan 25 claves de ambulancia a emergencia y 20 de emergencia a
+establecimiento. Como las ambulancias comparten base, el calculo reutiliza 30
+rutas viales unicas: las dos bases distintas hacia cada emergencia y cada
+emergencia hacia los cuatro establecimientos.
 
 ### 6. Aplicacion de heuristicas
 
@@ -249,7 +269,7 @@ No hay metricas hardcodeadas.
 
 ### Requisitos
 
-- Python 3.11 o superior. El entorno verificado usa Python 3.12.10.
+- Python 3.11 o superior. El entorno verificado usa Python 3.11.4.
 - No se requieren dependencias externas de Python.
 - Node.js es opcional y solo se usa para validar la sintaxis del JavaScript del
   mapa en las pruebas.
@@ -303,7 +323,7 @@ python -m ambulancias_pergamino listar-simulacion --nivel 2
 python -m ambulancias_pergamino avanzar-simulacion --pasos 2
 python -m ambulancias_pergamino avanzar-simulacion --hasta-final
 python -m ambulancias_pergamino ver-simulacion --emergencia E2
-python -m ambulancias_pergamino ver-simulacion --ambulancia A6 --etapa 2
+python -m ambulancias_pergamino ver-simulacion --ambulancia A2 --etapa 2
 
 # Evaluacion final
 python -m ambulancias_pergamino evaluar-escenarios
@@ -340,11 +360,46 @@ teselas al no recibir un `Referer` HTTP valido.
 
 El mapa conserva:
 
-- visor manual de alternativas;
-- reduccion heuristica de candidatos;
-- asignacion global por conjunto;
-- simulacion logica por etapa y por emergencia;
-- evaluacion comparativa de los cinco escenarios.
+- visor manual de alternativas ambulancia-emergencia-establecimiento;
+- cuadro de liberacion de ambulancias en uso, ubicado debajo del mapa;
+- cuadro para agregar urgencias con su grado y una ubicacion propia;
+- calculo local de rutas para las urgencias creadas desde el navegador;
+- estimacion del tiempo hasta que una ambulancia vuelve a estar disponible.
+
+El cuadro de liberacion se alimenta con el boton **Poner ambulancia en uso** del
+visor manual. Para cada atencion registrada muestra la ambulancia, la emergencia,
+el establecimiento, el recorrido y el tiempo estimado hasta quedar disponible.
+Ese tiempo se descuenta en vivo y, al llegar a cero, la ambulancia se libera
+automaticamente y vuelve a figurar como disponible. El boton **Liberar** permite
+adelantar la liberacion de forma manual.
+
+Al despachar, la urgencia sale del selector, la ambulancia usada deja de estar
+disponible y el visor queda listo para elegir otra urgencia. Mientras la
+ambulancia esta en uso, la urgencia agregada no se puede quitar: el boton
+**Quitar** queda deshabilitado. Cuando la ambulancia se libera (automatica o
+manualmente), la urgencia pasa a estado **Atendida** con la ambulancia y la
+hora, y se ubica al final de la lista.
+
+El cuadro **Urgencias y grados** permite crear una urgencia nueva indicando un
+ID, un grado de 1 a 3 y una ubicacion propia, ya sea escribiendo la latitud y la
+longitud o haciendo clic en **Elegir en el mapa**. El mapa conecta esa ubicacion
+con el nodo vial mas cercano y calcula en el navegador las rutas hacia cada
+ambulancia y establecimiento, junto con las alternativas y su factibilidad. La
+urgencia se agrega al mapa y al selector manual, y se puede quitar mientras no
+forme parte del flujo automatico.
+
+```text
+tiempo_min =
+    (recorrido_asignado_m + regreso_a_la_base_m) / 1000 / 40 * 60
+    + 10
+```
+
+El recorrido asignado es la suma de los dos tramos manuales. El regreso a la
+base se toma de la ruta dirigida entre la base del establecimiento y la base de
+la ambulancia. La velocidad supuesta es 40 km/h y se suman 10 minutos fijos de
+atencion. Los paneles de las etapas 6 a 9 (heuristicas, asignacion, simulacion y
+evaluacion) no se muestran en el mapa; los modulos, comandos de la CLI y pruebas
+se conservan.
 
 ## Resultados
 
@@ -355,34 +410,41 @@ verifican en la suite de pruebas.
 
 | Escenario | Generadas | Factibles | Conservadas | Evaluadas | Reduccion | Atendidas | Sin asignar | Costo | Distancia | Penalizaciones | Diferencias |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Original | 120 | 120 | 120 | 30 | 0.00 % | 5 | 0 | 27017.174 m | 24017.174 m | 3000 m | 0 |
-| Nivel 1 | 120 | 120 | 30 | 15 | 75.00 % | 5 | 0 | 27017.174 m | 24017.174 m | 3000 m | 0 |
-| Nivel 2 | 120 | 120 | 60 | 20 | 50.00 % | 5 | 0 | 27017.174 m | 24017.174 m | 3000 m | 0 |
-| Nivel 3 | 120 | 120 | 100 | 25 | 16.67 % | 5 | 0 | 27017.174 m | 24017.174 m | 3000 m | 0 |
-| Nivel 4 | 120 | 120 | 120 | 30 | 0.00 % | 5 | 0 | 27017.174 m | 24017.174 m | 3000 m | 0 |
+| Original | 100 | 44 | 44 | 22 | 0.00 % | 5 | 0 | 32231.476 m | 29231.476 m | 3000 m | 0 |
+| Nivel 1 | 100 | 44 | 30 | 15 | 31.82 % | 4 | 1 | 24615.300 m | 21615.300 m | 3000 m | 2 |
+| Nivel 2 | 100 | 44 | 40 | 20 | 9.09 % | 5 | 0 | 32231.476 m | 29231.476 m | 3000 m | 0 |
+| Nivel 3 | 100 | 44 | 44 | 22 | 0.00 % | 5 | 0 | 32231.476 m | 29231.476 m | 3000 m | 0 |
+| Nivel 4 | 100 | 44 | 44 | 22 | 0.00 % | 5 | 0 | 32231.476 m | 29231.476 m | 3000 m | 0 |
 
-Las ambulancias utilizadas son A1, A2, A4, A5 y A6. Los destinos seleccionados
-son GUARDIA-1, GUARDIA-2 y GUARDIA-3. La ambulancia A3 no participa.
+Las ambulancias utilizadas en la asignacion original son A1, A2, A3, A4 y A5.
+La ambulancia A3 (reserva) se usa para E2 porque la emergencia tiene gravedad 3.
+Los destinos seleccionados son GUARDIA-1 y GUARDIA-2; GUARDIA-3 y GUARDIA-4
+quedan inactivas.
+
+El nivel 1 ya no cubre las cinco emergencias: al conservar solo tres ambulancias
+por emergencia, E5 queda sin asignar y el nivel recomendado pasa a ser el 2.
 
 ### Asignaciones
 
 | Emergencia | Ambulancia | Base | Destino | Tramo inicial | Tramo al destino | Total | Penalizacion | Costo |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| E2 | A6 | SAME | GUARDIA-3 | 2445 m | 4124 m | 6569 m | 1000 m | 7569 m |
-| E1 | A1 | GUARDIA-2 | GUARDIA-2 | 2667 m | 2675 m | 5342 m | 1000 m | 6342 m |
-| E3 | A2 | GUARDIA-3 | GUARDIA-3 | 478 m | 696 m | 1174 m | 1000 m | 2174 m |
-| E4 | A4 | GUARDIA-1 | GUARDIA-1 | 1769 m | 1700 m | 3468 m | 0 m | 3468 m |
-| E5 | A5 | GUARDIA-5 | GUARDIA-1 | 3314 m | 4148 m | 7462 m | 0 m | 7462 m |
+| E2 | A3 | SAME | GUARDIA-2 | 2445 m | 4375 m | 6820 m | 1000 m | 7820 m |
+| E1 | A1 | SAME | GUARDIA-2 | 3479 m | 2675 m | 6154 m | 1000 m | 7154 m |
+| E3 | A4 | GUARDIA-5 | GUARDIA-2 | 1156 m | 948 m | 2104 m | 1000 m | 3104 m |
+| E4 | A5 | GUARDIA-5 | GUARDIA-1 | 4838 m | 1700 m | 6538 m | 0 m | 6538 m |
+| E5 | A2 | SAME | GUARDIA-1 | 3468 m | 4148 m | 7616 m | 0 m | 7616 m |
 
 ### Estados finales
 
-En la etapa final:
+En la etapa final de la asignacion original y de los niveles 2 a 4:
 
 - las cinco emergencias estan `finalizada`;
-- las ambulancias A1, A2, A4, A5 y A6 estan `finalizada`;
-- la ambulancia A3 permanece `disponible`;
+- las cinco ambulancias estan `finalizada`;
 - se completaron 5 atenciones de 5;
 - no hay emergencias sin asignar.
+
+En el nivel 1, E5 queda `sin_asignacion`, A3 permanece `disponible` y se
+completan 4 atenciones.
 
 ## Evaluacion de las heuristicas
 
@@ -390,45 +452,44 @@ En la etapa final:
 
 Los cuatro niveles reducen el conjunto de alternativas factibles:
 
-- nivel 1: de 120 a 30 alternativas conservadas (75.00 % de reduccion);
-- nivel 2: de 120 a 60 (50.00 %);
-- nivel 3: de 120 a 100 (16.67 %);
-- nivel 4: de 120 a 120 (0.00 %).
+- nivel 1: de 44 a 30 alternativas conservadas (31.82 % de reduccion);
+- nivel 2: de 44 a 40 (9.09 %);
+- nivel 3: de 44 a 44 (0.00 %);
+- nivel 4: de 44 a 44 (0.00 %).
 
 La cantidad de alternativas evaluadas tras la dominancia por
-`(emergencia, ambulancia)` es 30 en el original, 15 en nivel 1, 20 en nivel 2,
-25 en nivel 3 y 30 en nivel 4.
+`(emergencia, ambulancia)` es 22 en el original, 15 en nivel 1, 20 en nivel 2,
+22 en nivel 3 y 22 en nivel 4.
 
 ### Calidad de los resultados
 
 Con los datos actuales:
 
-- los cinco escenarios atienden las mismas 5 emergencias;
-- no hay emergencias sin asignar;
-- las asignaciones son identicas en los cinco escenarios;
-- los costos, distancias y penalizaciones son identicos;
-- no se detectaron diferencias de asignacion respecto del original;
-- el nivel 1 es suficiente para obtener el mismo resultado que el original en
-  este conjunto de datos.
+- los niveles 2, 3 y 4 atienden las 5 emergencias y coinciden con el original;
+- el nivel 1 atiende solo 4 emergencias y deja E5 sin asignar;
+- en el nivel 1, E2 se reasigna de A3 a A2 y A3 queda disponible, por lo que se
+  detectan dos diferencias respecto del original;
+- los costos, distancias y penalizaciones del nivel 1 son menores porque no
+  traslada a E5;
+- el nivel recomendado es el 2, el menor nivel que reproduce el resultado
+  original completo.
 
-Esto **no demuestra** que el nivel 1 sea siempre suficiente. Significa
-unicamente que, para los datos actuales, la reduccion del nivel 1 conservo las
-alternativas necesarias para alcanzar la misma solucion. Con otros datos podria
-perder una alternativa relevante; `comparar-asignaciones` y
-`evaluar-escenarios` informan si se detecta una perdida respecto del original.
+La reduccion del nivel 1 pierde una alternativa necesaria para atender las cinco
+emergencias. `comparar-asignaciones` y `evaluar-escenarios` detectan esa perdida
+e informan las diferencias de asignacion.
 
 ### Alcance de la optimalidad
 
 Hay que distinguir tres conceptos:
 
 1. **Optimo dentro del conjunto original:** la asignacion original se resuelve
-   sobre las 120 alternativas factibles. En el modelo actual, sin capacidad
+   sobre las 44 alternativas factibles. En el modelo actual, sin capacidad
    compartida de establecimientos, la dominancia por par
    `(emergencia, ambulancia)` es segura y el backtracking agota las
    combinaciones relevantes.
 2. **Optimo dentro de un conjunto reducido:** cada nivel heuristico es optimo
-   dentro de las alternativas que conservo, no necesariamente dentro de las 120
-   originales.
+   dentro de las alternativas que conservo, no necesariamente dentro de las 44
+   factibles originales.
 3. **Optimo global del modelo completo:** solo puede afirmarse para el conjunto
    original evaluado. No se afirma optimalidad global frente a restricciones que
    el modelo no representa, como capacidad compartida, tiempos reales o reservas
@@ -444,17 +505,13 @@ conjunto evaluado. No es una garantia de optimalidad global del problema real.
 Se verifico que las bases informadas coinciden con la configuracion y con los
 datos de las bases:
 
-- A1: GUARDIA-2;
-- A2: GUARDIA-3;
-- A3: GUARDIA-4;
-- A4: GUARDIA-1;
-- A5: GUARDIA-5;
-- A6: SAME.
+- A1, A2 y A3: base SAME;
+- A4 y A5: base GUARDIA-5 (Medicar).
 
-Las coincidencias entre base de la ambulancia y destino elegido, como
-`E1 -> A1 -> GUARDIA-2` o `E3 -> A2 -> GUARDIA-3`, son resultados validos de la
-asignacion, no errores de construccion. No se modificaron datos para forzar
-ninguna tabla.
+A3 es la ambulancia de reserva y solo se asigna a emergencias de gravedad 3.
+Las coincidencias entre base de la ambulancia y destino elegido son resultados
+validos de la asignacion, no errores de construccion. No se modificaron datos
+para forzar ninguna tabla.
 
 ### Estados del paso 3
 
@@ -484,11 +541,11 @@ semantica y verifican que el paso 3 no se confunda con la finalizacion.
 
 ## Pruebas
 
-La suite actual contiene **164 pruebas**:
+La suite actual contiene **170 pruebas**:
 
 ```text
 python -m unittest discover -v
-Ran 164 tests
+Ran 170 tests
 OK
 ```
 
@@ -514,7 +571,8 @@ La validacion del JavaScript se realiza con Node.js cuando esta disponible.
 - No se modela el regreso de la ambulancia a la base.
 - No se modela la reutilizacion de una ambulancia despues de finalizar una
   atencion.
-- No hay reservas reales ni cambios dinamicos de disponibilidad.
+- La reserva es una regla logica fija (A3 solo para gravedad 3); no hay reservas
+  reales ni cambios dinamicos de disponibilidad.
 - La capacidad compartida de establecimientos no esta modelada: los destinos no
   se consumen entre emergencias.
 - La optimalidad esta acotada al conjunto de alternativas evaluado. No se afirma

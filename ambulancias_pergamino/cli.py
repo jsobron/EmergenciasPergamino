@@ -6,7 +6,7 @@ from itertools import permutations
 from math import isinf
 from pathlib import Path
 
-from .datos import construir_bases
+from .datos import construir_bases, construir_indice_direcciones
 from .ambulancias import Ambulancia, cargar_ambulancias
 from .alternativas import Alternativa, ResultadoAlternativas, construir_alternativas
 from .asignacion import (
@@ -39,10 +39,21 @@ from .simulacion import (
 FILTRO_CALLEJERO = "localidad='Pergamino' AND transitable='si'"
 
 
-def construir(salida: Path) -> None:
+def construir(salida: Path, salida_direcciones: Path | None = None) -> None:
     print("Descargando callejero de Pergamino...")
     callejero = descargar_geojson("geonode:callejero", filtro_cql=FILTRO_CALLEJERO)
     print(f"Tramos recibidos: {len(callejero.get('features', []))}")
+
+    if salida_direcciones is not None:
+        direcciones = construir_indice_direcciones(callejero)
+        salida_direcciones.parent.mkdir(parents=True, exist_ok=True)
+        salida_direcciones.write_text(
+            json.dumps(direcciones, ensure_ascii=False), encoding="utf-8"
+        )
+        print(
+            f"Índice de direcciones guardado en {salida_direcciones} "
+            f"({len(direcciones)} entradas)"
+        )
 
     grafo, advertencias = construir_grafo(callejero)
     print(
@@ -80,6 +91,16 @@ def construir(salida: Path) -> None:
         )
 
 
+def construir_direcciones(salida: Path) -> None:
+    print("Descargando callejero de Pergamino...")
+    callejero = descargar_geojson("geonode:callejero", filtro_cql=FILTRO_CALLEJERO)
+    print(f"Tramos recibidos: {len(callejero.get('features', []))}")
+    direcciones = construir_indice_direcciones(callejero)
+    salida.parent.mkdir(parents=True, exist_ok=True)
+    salida.write_text(json.dumps(direcciones, ensure_ascii=False), encoding="utf-8")
+    print(f"Índice de direcciones guardado en {salida} ({len(direcciones)} entradas)")
+
+
 def verificar_rutas(entrada: Path) -> None:
     datos = json.loads(entrada.read_text(encoding="utf-8"))
     grafo = Grafo.deserializar(datos["grafo"])
@@ -107,20 +128,34 @@ def listar_ambulancias(entrada: Path, configuracion: Path) -> None:
     filas = [
         (
             ambulancia.id,
+            ambulancia.etiqueta,
             bases_por_id[ambulancia.base_id]["nombre"],
             ambulancia.nodo_id,
             "sí" if ambulancia.disponible else "no",
+            "sí" if ambulancia.reserva else "no",
             str(ambulancia.complejidad),
             str(ambulancia.capacidad_pacientes),
         )
         for ambulancia in ambulancias
     ]
-    encabezados = ("ID", "Base", "Nodo", "Disponible", "Complejidad", "Capacidad")
-    anchos = [max(len(encabezados[i]), *(len(fila[i]) for fila in filas)) for i in range(6)]
+    encabezados = (
+        "ID",
+        "Nombre",
+        "Base",
+        "Nodo",
+        "Disponible",
+        "Reserva",
+        "Complejidad",
+        "Capacidad",
+    )
+    anchos = [
+        max(len(encabezados[i]), *(len(fila[i]) for fila in filas))
+        for i in range(len(encabezados))
+    ]
     formato = "  ".join(f"{{:<{ancho}}}" for ancho in anchos)
     print("Datos simulados: sí")
     print(formato.format(*encabezados))
-    print(formato.format(*(guion * ancho for guion, ancho in zip("------", anchos))))
+    print(formato.format(*(guion * ancho for guion, ancho in zip("-" * len(anchos), anchos))))
     for fila in filas:
         print(formato.format(*fila))
 
@@ -1130,6 +1165,14 @@ def main() -> None:
 
     construir_parser = subparsers.add_parser("construir")
     construir_parser.add_argument("--salida", type=Path, default=Path("data/pergamino.json"))
+    construir_parser.add_argument(
+        "--direcciones", type=Path, default=Path("data/direcciones.json")
+    )
+
+    direcciones_parser = subparsers.add_parser("construir-direcciones")
+    direcciones_parser.add_argument(
+        "--salida", type=Path, default=Path("data/direcciones.json")
+    )
 
     rutas_parser = subparsers.add_parser("verificar-rutas")
     rutas_parser.add_argument("--entrada", type=Path, default=Path("data/pergamino.json"))
@@ -1377,10 +1420,15 @@ def main() -> None:
     mapa_parser.add_argument(
         "--emergencias", type=Path, default=Path("config/emergencias.json")
     )
+    mapa_parser.add_argument(
+        "--direcciones", type=Path, default=Path("data/direcciones.json")
+    )
 
     argumentos = parser.parse_args()
     if argumentos.comando == "construir":
-        construir(argumentos.salida)
+        construir(argumentos.salida, argumentos.direcciones)
+    elif argumentos.comando == "construir-direcciones":
+        construir_direcciones(argumentos.salida)
     elif argumentos.comando == "verificar-rutas":
         verificar_rutas(argumentos.entrada)
     elif argumentos.comando == "listar-ambulancias":
@@ -1523,6 +1571,7 @@ def main() -> None:
             argumentos.salida,
             argumentos.establecimientos,
             argumentos.emergencias,
+            argumentos.direcciones,
         )
         print(f"Mapa guardado en {argumentos.salida}")
 

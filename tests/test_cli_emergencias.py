@@ -39,7 +39,7 @@ class CliEmergenciasTest(unittest.TestCase):
 
         texto = salida.getvalue()
         self.assertEqual(5, texto.count("Bases alcanzables (6)"))
-        self.assertEqual(5, texto.count("Destinos alcanzables (4)"))
+        self.assertEqual(5, texto.count("Destinos alcanzables (2)"))
         self.assertNotIn("ADVERTENCIA", texto)
         self.assertNotIn("ambulancia elegida", texto.lower())
 

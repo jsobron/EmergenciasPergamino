@@ -137,9 +137,9 @@ class AsignacionTest(unittest.TestCase):
             ["E2", "E1", "E3", "E4", "E5"],
             resultado.emergencias_atendidas,
         )
-        self.assertAlmostEqual(27017.174, resultado.costo_total, places=6)
-        self.assertEqual(120, resultado.alternativas_candidatas)
-        self.assertEqual(30, resultado.alternativas_evaluadas)
+        self.assertAlmostEqual(32231.476, resultado.costo_total, places=6)
+        self.assertEqual(44, resultado.alternativas_candidatas)
+        self.assertEqual(22, resultado.alternativas_evaluadas)
         self.assertEqual(
             len(resultado.emergencias_atendidas),
             len(set(resultado.emergencias_atendidas)),
@@ -149,7 +149,7 @@ class AsignacionTest(unittest.TestCase):
             len(set(resultado.ambulancias_utilizadas)),
         )
 
-    def test_nivel1_alcanza_la_misma_asignacion_que_el_original(self):
+    def test_nivel1_pierde_cobertura_frente_al_original(self):
         nivel1 = asignar_con_nivel(
             self.resultado,
             self.ambulancias,
@@ -157,19 +157,35 @@ class AsignacionTest(unittest.TestCase):
             self.establecimientos,
             1,
         )
+        nivel2 = asignar_con_nivel(
+            self.resultado,
+            self.ambulancias,
+            self.emergencias,
+            self.establecimientos,
+            2,
+        )
         original = asignar_original(
             self.resultado, self.ambulancias, self.emergencias
         )
 
-        self.assertTrue(nivel1.es_completa)
+        self.assertFalse(nivel1.es_completa)
         self.assertTrue(nivel1.es_optima)
         self.assertEqual(30, nivel1.alternativas_candidatas)
         self.assertEqual(15, nivel1.alternativas_evaluadas)
-        self.assertEqual(original.emergencias_atendidas, nivel1.emergencias_atendidas)
+        self.assertEqual(4, nivel1.cantidad_atendidas)
+        self.assertEqual(["E5"], nivel1.emergencias_sin_asignar)
         self.assertEqual(
-            original.ambulancias_utilizadas, nivel1.ambulancias_utilizadas
+            MOTIVO_AMBULANCIAS_USADAS,
+            nivel1.motivos_sin_asignar["E5"],
         )
-        self.assertAlmostEqual(original.costo_total, nivel1.costo_total, places=6)
+        self.assertAlmostEqual(24615.3, nivel1.costo_total, places=6)
+
+        self.assertTrue(nivel2.es_completa)
+        self.assertEqual(original.emergencias_atendidas, nivel2.emergencias_atendidas)
+        self.assertEqual(
+            original.ambulancias_utilizadas, nivel2.ambulancias_utilizadas
+        )
+        self.assertAlmostEqual(original.costo_total, nivel2.costo_total, places=6)
 
     def test_maximiza_cantidad_ante_una_ambulancia_compartida(self):
         emergencias = [self.emergencia("E1"), self.emergencia("E2")]
@@ -275,20 +291,28 @@ class AsignacionTest(unittest.TestCase):
 
     def test_respeta_complejidad_y_equipamiento(self):
         casos = (
-            ("complejidad", {"complejidad_requerida": 3}),
-            ("equipamiento", {"equipamiento_requerido": ["DEA"]}),
+            (
+                "complejidad",
+                {"complejidad_requerida": 3},
+                [replace(ambulancia, complejidad=2) for ambulancia in self.ambulancias],
+            ),
+            (
+                "equipamiento",
+                {"equipamiento_requerido": ["DEA"]},
+                self.ambulancias,
+            ),
         )
-        for nombre, cambios in casos:
+        for nombre, cambios, ambulancias in casos:
             with self.subTest(restriccion=nombre):
                 emergencia = replace(self.emergencia_base, id="E1", **cambios)
                 resultado = construir_alternativas(
-                    self.ambulancias,
+                    ambulancias,
                     [emergencia],
                     self.establecimientos,
                     self.grafo,
                 )
                 asignacion = asignar_original(
-                    resultado, self.ambulancias, [emergencia]
+                    resultado, ambulancias, [emergencia]
                 )
                 self.assertEqual(["E1"], asignacion.emergencias_sin_asignar)
                 self.assertEqual(
@@ -371,24 +395,27 @@ class AsignacionTest(unittest.TestCase):
             resultado.parametros.nivel for resultado in comparacion.niveles
         ])
         self.assertEqual(
-            [30, 60, 100, 120],
+            [30, 40, 44, 44],
             [
                 resultado.alternativas_candidatas
                 for resultado in comparacion.niveles
             ],
         )
         self.assertEqual(
-            [15, 20, 25, 30],
+            [15, 20, 22, 22],
             [
                 resultado.alternativas_evaluadas
                 for resultado in comparacion.niveles
             ],
         )
-        self.assertEqual(1, comparacion.nivel_recomendado)
-        self.assertFalse(comparacion.perdida_por_heuristica)
-        self.assertEqual([], comparacion.niveles_con_perdida)
-        self.assertEqual({}, comparacion.diferencias)
-        for resultado in comparacion.niveles:
+        self.assertEqual(2, comparacion.nivel_recomendado)
+        self.assertTrue(comparacion.perdida_por_heuristica)
+        self.assertEqual([1], comparacion.niveles_con_perdida)
+        self.assertIn(1, comparacion.diferencias)
+        nivel1 = comparacion.niveles[0]
+        self.assertFalse(nivel1.es_completa)
+        self.assertEqual(4, nivel1.cantidad_atendidas)
+        for resultado in comparacion.niveles[1:]:
             self.assertTrue(resultado.es_completa)
             self.assertAlmostEqual(
                 comparacion.original.costo_total,
