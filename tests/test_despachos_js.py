@@ -36,6 +36,11 @@ for (const a of ['A1','A2']) for (const e of ['GUARDIA-1','GUARDIA-2']) {
 function setInterval() {}
 function dibujarAlternativa() {}
 function nombreDeAmbulancia(id) { return id; }
+function Option(text, value) { this.text=text; this.value=value; }
+selectorEmergencia.add = opcion => selectorEmergencia.options.push(opcion);
+Object.defineProperty(selectorEmergencia, 'length', {
+ set(value) { selectorEmergencia.options.length=value; }
+});
 ''';
             casos = r'''
 renderDashboard = () => {};
@@ -51,7 +56,12 @@ pacientesDespacho.value='-1'; asignar('A1'); assert.equal(despachos.size,0);
 pacientesDespacho.value='0.5'; asignar('A1'); assert.equal(despachos.size,0);
 pacientesDespacho.value='1';
 asignar('A1'); assert.equal(despachos.size,1); assert.equal(coberturaCompleta('E1'),false);
+refrescarSelectorEmergencias();
+assert.equal(selectorEmergencia.options.some(o => o.value === 'E1'), true, 'La cobertura parcial sigue seleccionable');
 asignar('A2'); assert.equal(despachos.size,2); assert.equal(coberturaCompleta('E1'),true);
+refrescarSelectorEmergencias();
+assert.equal(selectorEmergencia.options.some(o => o.value === 'E1'), false, 'La cobertura completa sale del selector');
+assert.equal(selectorEmergencia.value, '', 'La selección anterior debe limpiarse');
 asignar('A1'); assert.equal(despachos.size,2);
 hospitalDisponible.value='no';
 assert.equal(despachos.size,2); // Cambiar hospital conserva servicios en curso.

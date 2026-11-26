@@ -1382,6 +1382,7 @@ def _plantilla_html(datos_json: str) -> str:
       inicial.disabled = true;
       selectorEmergencia.add(inicial);
       datos.emergencias.forEach((emergencia) => {{
+        if (coberturaCompleta(emergencia.id)) return;
         selectorEmergencia.add(
           new Option(
             `${{emergencia.id}} — gravedad ${{emergencia.gravedad}}`,
