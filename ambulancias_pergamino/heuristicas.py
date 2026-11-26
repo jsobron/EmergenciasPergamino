@@ -153,8 +153,6 @@ def _motivos_ambulancia(
         motivos.append("ambulancia_de_reserva_solo_gravedad_3")
     if ambulancia.complejidad < emergencia.complejidad_requerida:
         motivos.append("complejidad_ambulancia_insuficiente")
-    if ambulancia.capacidad_pacientes < emergencia.cantidad_pacientes:
-        motivos.append("capacidad_ambulancia_insuficiente")
     if not all(
         equipo in ambulancia.equipamiento
         for equipo in emergencia.equipamiento_requerido

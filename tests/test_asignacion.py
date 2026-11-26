@@ -137,7 +137,7 @@ class AsignacionTest(unittest.TestCase):
             ["E2", "E1", "E3", "E4", "E5"],
             resultado.emergencias_atendidas,
         )
-        self.assertAlmostEqual(32231.476, resultado.costo_total, places=6)
+        self.assertAlmostEqual(35872.305, resultado.costo_total, places=6)
         self.assertEqual(44, resultado.alternativas_candidatas)
         self.assertEqual(22, resultado.alternativas_evaluadas)
         self.assertEqual(
@@ -178,7 +178,7 @@ class AsignacionTest(unittest.TestCase):
             MOTIVO_AMBULANCIAS_USADAS,
             nivel1.motivos_sin_asignar["E5"],
         )
-        self.assertAlmostEqual(24615.3, nivel1.costo_total, places=6)
+        self.assertAlmostEqual(28256.129, nivel1.costo_total, places=6)
 
         self.assertTrue(nivel2.es_completa)
         self.assertEqual(original.emergencias_atendidas, nivel2.emergencias_atendidas)

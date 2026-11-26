@@ -40,12 +40,12 @@ class CliSimulacionTest(unittest.TestCase):
         self.assertIn("Tipo: lógica por etapas (sin tiempos reales)", texto)
         self.assertIn("Atenciones: 4", texto)
         self.assertIn("Completadas: 4", texto)
-        self.assertIn("Costo total: 24615 m", texto)
-        self.assertIn("Distancia total: 21615 m", texto)
-        self.assertIn("Penalizaciones: 3000 m", texto)
+        self.assertIn("Costo total: 28256 m", texto)
+        self.assertIn("Distancia total: 28256 m", texto)
+        self.assertIn("Penalizaciones: 0 m", texto)
         self.assertIn(
-            "E2 -> A2 (base SAME) -> GUARDIA-2: "
-            "emergencia finalizada, ambulancia finalizada, 7820 m",
+            "E2 -> A2 (base SAME) -> GUARDIA-1: "
+            "emergencia finalizada, ambulancia finalizada, 8689 m",
             texto,
         )
         self.assertIn("E1: finalizada", texto)
@@ -106,10 +106,10 @@ class CliSimulacionTest(unittest.TestCase):
         )
         self.assertIn("Emergencia E2:", texto)
         self.assertIn("Ambulancia: A2 (base SAME, estado finalizada)", texto)
-        self.assertIn("Destino: GUARDIA-2", texto)
+        self.assertIn("Destino: GUARDIA-1", texto)
         self.assertIn("Tramo ambulancia -> emergencia: 2445 m", texto)
-        self.assertIn("Tramo emergencia -> destino: 4375 m", texto)
-        self.assertIn("Costo: 7820 m", texto)
+        self.assertIn("Tramo emergencia -> destino: 6244 m", texto)
+        self.assertIn("Costo: 8689 m", texto)
 
         texto = self.ejecutar(
             ver_simulacion,
@@ -119,7 +119,7 @@ class CliSimulacionTest(unittest.TestCase):
         self.assertIn("Ambulancia A2:", texto)
         self.assertIn("Estado: en_atencion", texto)
         self.assertIn("Emergencia: E2", texto)
-        self.assertIn("Destino: GUARDIA-2", texto)
+        self.assertIn("Destino: GUARDIA-1", texto)
 
     def test_rechaza_etapa_y_nivel_inexistentes(self) -> None:
         with self.assertRaisesRegex(ValueError, "Etapa de simulación inexistente"):

@@ -40,17 +40,17 @@ class CliAsignacionTest(unittest.TestCase):
         self.assertIn("Emergencias sin asignar: 1", texto)
         self.assertIn("Asignación completa: no", texto)
         self.assertIn("Óptima dentro del conjunto: sí", texto)
-        self.assertIn("Costo total: 24615 m", texto)
+        self.assertIn("Costo total: 28256 m", texto)
         self.assertIn("Ambulancias utilizadas: A1, A2, A4, A5", texto)
         self.assertIn(
-            "Establecimientos seleccionados: GUARDIA-1, GUARDIA-2",
+            "Establecimientos seleccionados: GUARDIA-1",
             texto,
         )
         self.assertIn(
             "Emergencias atendidas (orden de prioridad): E2, E1, E3, E4",
             texto,
         )
-        self.assertIn("E2 -> A2 -> GUARDIA-2 (7820 m)", texto)
+        self.assertIn("E2 -> A2 -> GUARDIA-1 (8689 m)", texto)
         self.assertIn(
             "E5: ambulancias_candidatas_ya_utilizadas", texto
         )
@@ -79,7 +79,7 @@ class CliAsignacionTest(unittest.TestCase):
         self.assertIn("Emergencia  Ambulancia  Establecimiento", texto)
         self.assertIn("E2", texto)
         self.assertIn("A2", texto)
-        self.assertIn("GUARDIA-2", texto)
+        self.assertIn("GUARDIA-1", texto)
         self.assertIn("E5: ambulancias_candidatas_ya_utilizadas", texto)
 
     def test_listar_asignacion_original(self) -> None:

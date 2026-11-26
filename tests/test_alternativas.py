@@ -140,10 +140,11 @@ class AlternativasTest(unittest.TestCase):
                     alternativa.motivos_descarte,
                 )
 
-    def test_capacidad_ambulancia_insuficiente(self) -> None:
+    def test_capacidad_individual_permite_cobertura_con_otras_unidades(self) -> None:
         emergencia = replace(self.emergencias[0], cantidad_pacientes=2)
         alternativa = self.construir_una(emergencia=emergencia)
-        self.assertIn("capacidad_ambulancia_insuficiente", alternativa.motivos_descarte)
+        self.assertNotIn("capacidad_ambulancia_insuficiente", alternativa.motivos_descarte)
+        self.assertEqual(1, alternativa.capacidad_pacientes)
 
     def test_equipamiento_faltante(self) -> None:
         emergencia = replace(self.emergencias[0], equipamiento_requerido=["DEA"])
@@ -198,7 +199,7 @@ class AlternativasTest(unittest.TestCase):
             self.establecimientos[0], habilitado_destino=False, complejidad_maxima=1
         )
         alternativa = self.construir_una(ambulancia, emergencia, establecimiento)
-        self.assertEqual(6, len(alternativa.motivos_descarte))
+        self.assertEqual(5, len(alternativa.motivos_descarte))
 
     def test_rechaza_costos_no_finitos_o_negativos(self) -> None:
         base = dict(

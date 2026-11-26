@@ -74,8 +74,8 @@ def _mapa_asignaciones(
     asignacion: ResultadoAsignacion,
 ) -> dict[str, str]:
     return {
-        alternativa.emergencia_id: _texto_asignacion(alternativa)
-        for alternativa in asignacion.alternativas
+        emergencia_id: ", ".join(sorted(_texto_asignacion(a) for a in asignacion.alternativas if a.emergencia_id == emergencia_id))
+        for emergencia_id in asignacion.emergencias_atendidas
     }
 
 

@@ -164,9 +164,9 @@ class EvaluacionTest(unittest.TestCase):
 
     def test_asignaciones_y_diferencias_respecto_del_original(self) -> None:
         esperadas = {
-            "E2": ("A3", "GUARDIA-2"),
-            "E1": ("A1", "GUARDIA-2"),
-            "E3": ("A4", "GUARDIA-2"),
+            "E2": ("A3", "GUARDIA-1"),
+            "E1": ("A1", "GUARDIA-1"),
+            "E3": ("A4", "GUARDIA-1"),
             "E4": ("A5", "GUARDIA-1"),
             "E5": ("A2", "GUARDIA-1"),
         }

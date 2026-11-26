@@ -85,6 +85,7 @@ class AtencionSimulada:
     estado_emergencia: str
     estado_ambulancia: str
     completada: bool
+    pacientes_asignados: int = 0
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,8 @@ class EstadoEmergenciaSimulada:
     establecimiento_id: str | None
     motivo_sin_asignar: str | None
     completada: bool
+    ambulancia_ids: list[str] | None = None
+    establecimiento_ids: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +143,7 @@ class _AtencionProgramada:
     costo_seleccion: float
     tramo_ambulancia_emergencia: TramoSimulado
     tramo_emergencia_establecimiento: TramoSimulado
+    pacientes_asignados: int = 0
 
 
 def _verificar_distancia(
@@ -242,6 +246,7 @@ def _crear_atencion_programada(
     )
 
     return _AtencionProgramada(
+        pacientes_asignados=alternativa.pacientes_asignados,
         emergencia_id=emergencia.id,
         ambulancia_id=ambulancia.id,
         base_id=ambulancia.base_id,
@@ -377,6 +382,7 @@ class Simulacion:
         self, atencion: _AtencionProgramada
     ) -> AtencionSimulada:
         return AtencionSimulada(
+            pacientes_asignados=atencion.pacientes_asignados,
             emergencia_id=atencion.emergencia_id,
             ambulancia_id=atencion.ambulancia_id,
             base_id=atencion.base_id,
@@ -430,6 +436,8 @@ class Simulacion:
             establecimiento_id=atencion.establecimiento_id,
             motivo_sin_asignar=None,
             completada=self.es_final,
+            ambulancia_ids=[a.ambulancia_id for a in self._atenciones if a.emergencia_id == emergencia.id],
+            establecimiento_ids=sorted({a.establecimiento_id for a in self._atenciones if a.emergencia_id == emergencia.id}),
         )
 
     def _crear_estado_ambulancia(
@@ -482,10 +490,6 @@ def crear_simulacion(
     ambulancias_asignadas: set[str] = set()
     atenciones: list[_AtencionProgramada] = []
     for alternativa in asignacion.alternativas:
-        if alternativa.emergencia_id in emergencias_asignadas:
-            raise ValueError(
-                f"La emergencia {alternativa.emergencia_id} tiene más de una asignación"
-            )
         if alternativa.ambulancia_id in ambulancias_asignadas:
             raise ValueError(
                 f"La ambulancia {alternativa.ambulancia_id} tiene más de una asignación"

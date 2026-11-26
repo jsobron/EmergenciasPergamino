@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import combinations
 
 from .alternativas import Alternativa, ResultadoAlternativas
 from .ambulancias import Ambulancia
@@ -180,8 +181,10 @@ def _clave_parcial(
 
 
 def _buscar_mejor_asignacion(
-    candidatos: dict[str, list[Alternativa]], orden: list[str]
+    candidatos: dict[str, list[Alternativa]], orden: list[str],
+    emergencias: list[Emergencia],
 ) -> list[Alternativa]:
+    demandas = {e.id: e for e in emergencias}
     mejor_seleccion: list[Alternativa] = []
     mejor_clave: tuple[int, tuple[int, ...], float] | None = None
     mejor_identificadores: tuple[tuple[str, str, str], ...] | None = None
@@ -201,24 +204,29 @@ def _buscar_mejor_asignacion(
             mejor_seleccion = list(seleccionadas)
 
     def explorar(indice: int) -> None:
-        if (
-            mejor_clave is not None
-            and len(seleccionadas) + (len(orden) - indice) < mejor_clave[0]
-        ):
-            return
         if indice == len(orden):
             evaluar()
             return
 
         emergencia_id = orden[indice]
-        for alternativa in candidatos.get(emergencia_id, []):
-            if alternativa.ambulancia_id in usadas:
-                continue
-            usadas.add(alternativa.ambulancia_id)
-            seleccionadas.append(alternativa)
-            explorar(indice + 1)
-            seleccionadas.pop()
-            usadas.remove(alternativa.ambulancia_id)
+        demanda = demandas[emergencia_id]
+        disponibles = [a for a in candidatos.get(emergencia_id, []) if a.ambulancia_id not in usadas]
+        for cantidad in range(demanda.ambulancias_requeridas, len(disponibles) + 1):
+            for grupo in combinations(disponibles, cantidad):
+                if sum(a.capacidad_pacientes for a in grupo) < demanda.cantidad_pacientes:
+                    continue
+                # No ocupar unidades redundantes: conservar solo grupos mínimos.
+                if cantidad > demanda.ambulancias_requeridas and any(
+                    sum(a.capacidad_pacientes for a in grupo if a != omitida) >= demanda.cantidad_pacientes
+                    for omitida in grupo
+                ):
+                    continue
+                ids = {a.ambulancia_id for a in grupo}
+                usadas.update(ids)
+                seleccionadas.extend(grupo)
+                explorar(indice + 1)
+                del seleccionadas[-cantidad:]
+                usadas.difference_update(ids)
         explorar(indice + 1)
 
     explorar(0)
@@ -247,10 +255,22 @@ def asignar_global(
     orden_prioridad: list[str],
     etiqueta: str = "asignacion",
     parametros: ParametrosCandidatos | None = None,
+    hospital_disponible: bool = True,
 ) -> ResultadoAsignacion:
     orden = _normalizar_prioridad(emergencias, orden_prioridad)
     factibles, candidatos = _candidatos_por_emergencia(alternativas, orden)
-    seleccionadas = _buscar_mejor_asignacion(candidatos, orden)
+    if any(a.establecimiento_id == "GUARDIA-1" for a in alternativas):
+        permitidas = [a for a in alternativas if
+            (a.establecimiento_id == "GUARDIA-1") == hospital_disponible]
+        _, candidatos = _candidatos_por_emergencia(permitidas, orden)
+    seleccionadas = _buscar_mejor_asignacion(candidatos, orden, emergencias)
+    pendientes = {e.id: e.cantidad_pacientes for e in emergencias}
+    distribuidas = []
+    for alternativa in seleccionadas:
+        pacientes = min(alternativa.capacidad_pacientes, pendientes[alternativa.emergencia_id])
+        pendientes[alternativa.emergencia_id] -= pacientes
+        distribuidas.append(replace(alternativa, pacientes_asignados=pacientes))
+    seleccionadas = distribuidas
 
     atendidas_set = {alternativa.emergencia_id for alternativa in seleccionadas}
     atendidas = [
@@ -290,9 +310,7 @@ def asignar_global(
         es_completa=len(atendidas) == len(orden),
         es_optima=True,
         alternativas_candidatas=len(factibles),
-        alternativas_evaluadas=sum(
-            len(candidatas) for candidatas in candidatos.values()
-        ),
+        alternativas_evaluadas=sum(len(c) for c in _candidatos_por_emergencia(alternativas, orden)[1].values()),
         emergencias_con_candidatos=sum(
             1 for candidatas in candidatos.values() if candidatas
         ),
@@ -306,8 +324,11 @@ def asignar_con_nivel(
     emergencias: list[Emergencia],
     establecimientos: list[Establecimiento],
     nivel: int,
+    hospital_disponible: bool = True,
 ) -> ResultadoAsignacion:
     parametros = ParametrosCandidatos.desde_nivel(nivel)
+    if any(e.ambulancias_requeridas > 1 or e.cantidad_pacientes > 1 for e in emergencias):
+        parametros = replace(parametros, k=max(parametros.k, len(ambulancias)))
     reduccion = reducir_alternativas(
         resultado, ambulancias, emergencias, establecimientos, parametros
     )
@@ -318,6 +339,7 @@ def asignar_con_nivel(
         orden,
         etiqueta=f"nivel {nivel}",
         parametros=parametros,
+        hospital_disponible=hospital_disponible,
     )
 
 
@@ -325,6 +347,7 @@ def asignar_original(
     resultado: ResultadoAlternativas,
     ambulancias: list[Ambulancia],
     emergencias: list[Emergencia],
+    hospital_disponible: bool = True,
 ) -> ResultadoAsignacion:
     orden = [
         item.emergencia_id
@@ -335,6 +358,7 @@ def asignar_original(
         emergencias,
         orden,
         etiqueta="original",
+        hospital_disponible=hospital_disponible,
     )
 
 

@@ -27,6 +27,8 @@ class Alternativa:
     costo_seleccion: float | None
     es_factible: bool
     motivos_descarte: list[str]
+    capacidad_pacientes: int = 1
+    pacientes_asignados: int = 0
 
     def __post_init__(self) -> None:
         campos = (
@@ -117,8 +119,6 @@ def construir_alternativas(
                     motivos.append("ambulancia_de_reserva_solo_gravedad_3")
                 if ambulancia.complejidad < emergencia.complejidad_requerida:
                     motivos.append("complejidad_ambulancia_insuficiente")
-                if ambulancia.capacidad_pacientes < emergencia.cantidad_pacientes:
-                    motivos.append("capacidad_ambulancia_insuficiente")
                 if not all(
                     equipo in ambulancia.equipamiento
                     for equipo in emergencia.equipamiento_requerido
@@ -160,6 +160,7 @@ def construir_alternativas(
                         costo_seleccion=costo_seleccion,
                         es_factible=not motivos,
                         motivos_descarte=motivos,
+                        capacidad_pacientes=ambulancia.capacidad_pacientes,
                     )
                 )
     return ResultadoAlternativas(

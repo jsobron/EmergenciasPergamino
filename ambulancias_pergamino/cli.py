@@ -882,6 +882,13 @@ def ver_simulacion(
                 f"{estado.motivo_sin_asignar or 'motivo_no_informado'}"
             )
             return
+        atenciones_emergencia = [a for a in resultado.atenciones if a.emergencia_id == emergencia_id]
+        if len(atenciones_emergencia) > 1:
+            print("  Unidades asignadas:")
+            for unidad in atenciones_emergencia:
+                print(f"    {unidad.ambulancia_id} -> {unidad.establecimiento_id}: "
+                      f"{unidad.estado_ambulancia}, {_metros(unidad.costo_seleccion)}")
+            return
         atencion = next(
             atencion
             for atencion in resultado.atenciones

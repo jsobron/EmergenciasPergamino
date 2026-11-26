@@ -302,9 +302,9 @@ class DatosMapaTest(unittest.TestCase):
         self.assertEqual(4, simulacion["cantidad_completadas"])
         self.assertEqual(1, simulacion["cantidad_sin_asignar"])
         self.assertFalse(simulacion["es_completa"])
-        self.assertAlmostEqual(24615.3, simulacion["costo_total"])
-        self.assertAlmostEqual(21615.3, simulacion["distancia_total"])
-        self.assertAlmostEqual(3000.0, simulacion["penalizacion_total"])
+        self.assertAlmostEqual(28256.129, simulacion["costo_total"])
+        self.assertAlmostEqual(28256.129, simulacion["distancia_total"])
+        self.assertAlmostEqual(0.0, simulacion["penalizacion_total"])
 
         for atencion in simulacion["atenciones"]:
             alternativa = next(

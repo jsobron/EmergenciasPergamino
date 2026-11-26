@@ -24,6 +24,7 @@ class Emergencia:
     minutos_espera: float
     estado: str
     datos_simulados: bool
+    ambulancias_requeridas: int = 1
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,9 @@ def cargar_emergencias(configuracion: Path, grafo: Grafo) -> list[Emergencia]:
             )
 
         cantidad_pacientes = crudo.get("cantidad_pacientes")
+        requeridas = crudo.get("ambulancias_requeridas", 1)
+        if isinstance(requeridas, bool) or not isinstance(requeridas, int) or requeridas < 1:
+            raise ValueError("ambulancias_requeridas debe ser un entero mayor que cero")
         if (
             isinstance(cantidad_pacientes, bool)
             or not isinstance(cantidad_pacientes, int)
@@ -139,6 +143,7 @@ def cargar_emergencias(configuracion: Path, grafo: Grafo) -> list[Emergencia]:
                     emergencia_id,
                 ),
                 cantidad_pacientes=cantidad_pacientes,
+                ambulancias_requeridas=requeridas,
                 equipamiento_requerido=equipamiento.copy(),
                 minutos_espera=minutos_espera,
                 estado=estado,
