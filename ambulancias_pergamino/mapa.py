@@ -350,19 +350,20 @@ def _plantilla_html(datos_json: str) -> str:
       align-items: center;
       gap: 1rem;
       padding: 0.8rem 1.25rem;
-      background: #102a43;
-      border-bottom: 1px solid #0e426b;
+      background: #e0a800;
+      border-bottom: 1px solid #b38600;
       color: #fff;
       z-index: 1000;
-      box-shadow: 0 0.25rem 0.8rem #102a4333;
+      box-shadow: 0 0.25rem 0.8rem #e0a80033;
     }}
-    h1 {{ margin: 0; font-size: clamp(1.25rem, 2vw, 1.65rem); line-height: 1.2; letter-spacing: -0.02em; }}
+    h1 {{ margin: 0; color: #fff; font-size: clamp(1.25rem, 2vw, 1.65rem); line-height: 1.2; letter-spacing: -0.02em; }}
     .field, section, .workspace, .control-panel {{ min-width: 0; }}
     .field {{ display: grid; gap: 0.25rem; }}
     label {{ font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }}
-    header label {{ color: #d9efff; }}
+    header label {{ color: #fff; }}
     select,
-    input[type="text"] {{
+    input[type="text"],
+    input[type="number"] {{
       width: 100%;
       min-height: 2.5rem;
       padding: 0.45rem 0.65rem;
@@ -374,9 +375,11 @@ def _plantilla_html(datos_json: str) -> str:
       box-shadow: 0 1px 2px #1e3a5f0d;
     }}
     select:hover,
-    input[type="text"]:hover {{ border-color: #9eb4c9; }}
+    input[type="text"]:hover,
+    input[type="number"]:hover {{ border-color: #9eb4c9; }}
     select:focus-visible,
-    input[type="text"]:focus-visible {{
+    input[type="text"]:focus-visible,
+    input[type="number"]:focus-visible {{
       outline: 3px solid #78b9ff;
       outline-offset: 1px;
     }}
@@ -505,6 +508,7 @@ def _plantilla_html(datos_json: str) -> str:
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }}
+    .panel-atendidas {{ grid-column: 1 / -1; }}
     .form-urgencia {{
       display: grid;
       grid-template-columns: repeat(4, minmax(7rem, 1fr));
@@ -663,6 +667,10 @@ def _plantilla_html(datos_json: str) -> str:
       letter-spacing: 0.04em;
       text-transform: uppercase;
     }}
+    .dashboard-estado.fase-camino-accidente {{ background: #e8f0ff; color: #1d4ed8; }}
+    .dashboard-estado.fase-escena {{ background: #fff3e0; color: #b45309; }}
+    .dashboard-estado.fase-camino-hospital {{ background: #e5f6ee; color: #0b6b4f; }}
+    .dashboard-estado.fase-regreso {{ background: #edf1f5; color: #52667a; }}
     .dashboard-item-detalle,
     .dashboard-item-tramos {{
       color: var(--text-muted);
@@ -823,9 +831,6 @@ def _plantilla_html(datos_json: str) -> str:
     <aside class="control-panel" aria-label="Controles de análisis">
       <section class="alternative-controls" aria-labelledby="titulo-alternativas">
     <h2 id="titulo-alternativas">Visor manual de alternativas</h2>
-    <div class="field"><label for="hospital-disponible">Disponibilidad del hospital</label><select id="hospital-disponible"><option value="si">Hospital con lugar</option><option value="no">Hospital sin lugar: habilitar clínicas</option></select></div>
-    <p>La disponibilidad afecta los nuevos despachos. Los servicios en curso se conservan.</p>
-    <div class="field"><label for="despacho-pacientes">Pacientes a trasladar en esta unidad</label><input id="despacho-pacientes" type="number" min="0" step="1" value="1"></div>
     <div class="field"><label for="alternativa-ambulancia">Ambulancia</label><select id="alternativa-ambulancia"></select></div>
     <div class="field"><label for="alternativa-emergencia">Emergencia</label><select id="alternativa-emergencia"></select></div>
     <div class="field"><label for="alternativa-establecimiento">Establecimiento</label><select id="alternativa-establecimiento"></select></div>
@@ -848,7 +853,7 @@ def _plantilla_html(datos_json: str) -> str:
     <section class="panel-cuadro" aria-labelledby="titulo-urgencias">
       <h2 id="titulo-urgencias">Urgencias y grados</h2>
       <form id="form-urgencia" class="form-urgencia">
-        <div class="field"><label for="urgencia-pacientes">Pacientes</label><input id="urgencia-pacientes" type="number" min="1" step="1" value="1" required></div>
+        <div class="field"><label for="urgencia-pacientes">Pacientes de la urgencia</label><input id="urgencia-pacientes" type="number" min="1" step="1" value="1" required></div>
         <div class="field"><label for="urgencia-unidades">Mínimo de ambulancias</label><input id="urgencia-unidades" type="number" min="1" step="1" value="1" required></div>
         <div class="field">
           <label for="urgencia-id">ID de la urgencia</label>
@@ -882,6 +887,10 @@ def _plantilla_html(datos_json: str) -> str:
       </form>
       <p class="dashboard-nota">Buscá la dirección por <strong>calle y número</strong> o usá <strong>Elegir en el mapa</strong>. La urgencia se conecta al nodo vial más cercano; el grado se usa como gravedad y la complejidad requerida se limita a 2.</p>
       <ul id="lista-urgencias" class="lista-urgencias"></ul>
+    </section>
+    <section class="panel-cuadro panel-atendidas" aria-labelledby="titulo-atendidas">
+      <h2 id="titulo-atendidas">Urgencias atendidas</h2>
+      <ul id="lista-atendidas" class="lista-urgencias"></ul>
     </section>
   </div>
   <script id="datos-mapa" type="application/json">{datos_json}</script>
@@ -1256,7 +1265,7 @@ def _plantilla_html(datos_json: str) -> str:
           "No hay una alternativa registrada para esa combinación.";
         return;
       }}
-      botonAsignar.disabled = !alternativa.es_factible || !destinoPermitido(alternativa);
+      botonAsignar.disabled = !alternativa.es_factible;
       dibujadorManual.dibujar(ambulanciaId, emergenciaId, establecimientoId);
       const motivos = alternativa.motivos_descarte.length
         ? alternativa.motivos_descarte.map(escapar).join(", ")
@@ -1269,7 +1278,7 @@ def _plantilla_html(datos_json: str) -> str:
         <div><dt>Distancia física total:</dt><dd>${{mostrarMetros(alternativa.distancia_total_m)}}</dd></div>
         <div><dt>Penalización:</dt><dd>${{mostrarMetros(alternativa.penalizacion_establecimiento_m)}}</dd></div>
         <div><dt>Costo de selección:</dt><dd>${{mostrarMetros(alternativa.costo_seleccion)}}</dd></div>
-        <div><dt>Factible:</dt><dd>${{alternativa.es_factible && destinoPermitido(alternativa) ? "Sí" : "No (revisar disponibilidad del hospital o restricciones)"}}</dd></div>
+        <div><dt>Factible:</dt><dd>${{alternativa.es_factible ? "Sí" : "No (revisar restricciones)"}}</dd></div>
         <div><dt>Disponible en:</dt><dd>${{tiempoTexto}}</dd></div>
         <div><dt>Motivos:</dt><dd>${{motivos}}</dd></div>
       </dl>`;
@@ -1286,19 +1295,6 @@ def _plantilla_html(datos_json: str) -> str:
     const TIEMPO_ATENCION_MIN = 10;
     const despachos = new Map();
     const atendidas = new Map();
-    const hospitalDisponible = document.getElementById("hospital-disponible");
-    const pacientesDespacho = document.getElementById("despacho-pacientes");
-    function destinoPermitido(alternativa) {{
-      return (alternativa.establecimiento_id === "GUARDIA-1") === (hospitalDisponible.value === "si");
-    }}
-    hospitalDisponible.addEventListener("change", () => {{
-      [...selectorEstablecimiento.options].forEach((opcion) => {{
-        if (!opcion.value) return;
-        opcion.disabled = (opcion.value === "GUARDIA-1") !== (hospitalDisponible.value === "si");
-      }});
-      selectorEstablecimiento.value = "";
-      dibujarAlternativa();
-    }});
     function serviciosEmergencia(id) {{
       return [...despachos.values(), ...atendidas.values()].filter(item => item.alternativa.emergencia_id === id);
     }}
@@ -1307,6 +1303,37 @@ def _plantilla_html(datos_json: str) -> str:
       const servicios = serviciosEmergencia(id);
       return e && servicios.length >= (e.ambulancias_requeridas || 1) &&
         servicios.reduce((s, item) => s + item.pacientes, 0) >= e.cantidad_pacientes;
+    }}
+
+    function minutosPorDistancia(metros) {{
+      if (metros === null || metros === undefined) return 0;
+      return (metros / 1000) / VELOCIDAD_KMH * 60;
+    }}
+
+    function faseDespacho(item) {{
+      if (
+        item.inicioEn === undefined ||
+        item.liberacionEn === null ||
+        item.liberacionEn === undefined
+      ) {{
+        return {{ texto: "En uso", clase: "" }};
+      }}
+      const ahora = Date.now();
+      const llegada = item.inicioEn +
+        minutosPorDistancia(item.alternativa.distancia_ambulancia_emergencia_m) * 60000;
+      const salida = llegada + TIEMPO_ATENCION_MIN * 60000;
+      const hospital = salida +
+        minutosPorDistancia(item.alternativa.distancia_emergencia_establecimiento_m) * 60000;
+      if (ahora < llegada) {{
+        return {{ texto: "En camino al accidente", clase: "fase-camino-accidente" }};
+      }}
+      if (ahora < salida) {{
+        return {{ texto: "En escena", clase: "fase-escena" }};
+      }}
+      if (ahora < hospital) {{
+        return {{ texto: "Camino al hospital", clase: "fase-camino-hospital" }};
+      }}
+      return {{ texto: "Regresando a la base", clase: "fase-regreso" }};
     }}
 
     function tiempoHastaDisponible(alternativa) {{
@@ -1323,7 +1350,7 @@ def _plantilla_html(datos_json: str) -> str:
         vuelta,
         minutos: ida === null
           ? null
-          : (total / 1000) / VELOCIDAD_KMH * 60 + TIEMPO_ATENCION_MIN
+          : minutosPorDistancia(total) + TIEMPO_ATENCION_MIN
       }};
     }}
 
@@ -1438,10 +1465,11 @@ def _plantilla_html(datos_json: str) -> str:
         dashboardLista.innerHTML = enUso.map((item) => {{
           const alternativa = item.alternativa;
           const restante = minutosRestantes(item);
+          const fase = faseDespacho(item);
           return `<li class="dashboard-item">
             <div class="dashboard-item-titulo">
               <strong>${{escapar(nombreDeAmbulancia(alternativa.ambulancia_id))}} · ${{escapar(baseDeAmbulancia(alternativa.ambulancia_id))}}</strong>
-              <span class="dashboard-estado">En uso</span>
+              <span class="dashboard-estado ${{fase.clase}}">${{fase.texto}}</span>
             </div>
             <div class="dashboard-item-detalle">${{escapar(alternativa.emergencia_id)}} → ${{escapar(alternativa.establecimiento_id)}}</div>
             <div class="dashboard-item-tiempo">Disponible en <strong>${{minutosTexto(restante)}}</strong> <span class="dashboard-auto">· liberación automática</span></div>
@@ -1458,20 +1486,24 @@ def _plantilla_html(datos_json: str) -> str:
       const alternativa = alternativasPorClave[
         `${{selectorAmbulancia.value}}|${{selectorEmergencia.value}}|${{selectorEstablecimiento.value}}`
       ];
-      if (!alternativa || !alternativa.es_factible || !destinoPermitido(alternativa)) {{
+      if (!alternativa || !alternativa.es_factible) {{
         resultadoDespacho.textContent = "Elegí una alternativa factible para despacharla.";
         return;
       }}
       const emergenciaId = alternativa.emergencia_id;
       const ambulanciaId = alternativa.ambulancia_id;
-      const pacientes = Number(pacientesDespacho.value);
       const emergencia = datos.emergencias.find(e => e.id === emergenciaId);
       const servicios = serviciosEmergencia(emergenciaId);
-      const pendientes = emergencia.cantidad_pacientes - servicios.reduce((s, item) => s + item.pacientes, 0);
-      if (!Number.isInteger(pacientes) || pacientes < 0 || pacientes > ambulanciasPorId[ambulanciaId].capacidad_pacientes || pacientes > pendientes) {{
-        resultadoDespacho.textContent = "Revisá los pacientes: no superar la capacidad de la unidad ni los pacientes pendientes. Usá 0 para apoyo.";
-        return;
-      }}
+      const pendientes = Math.max(
+        0,
+        emergencia.cantidad_pacientes -
+          servicios.reduce((s, item) => s + item.pacientes, 0)
+      );
+      const capacidad = ambulanciasPorId[ambulanciaId].capacidad_pacientes;
+      const pacientes = Math.min(1, capacidad, pendientes);
+      const detallePacientes = pacientes
+        ? `Traslada ${{pacientes}} ${{pacientes === 1 ? "paciente" : "pacientes"}}. `
+        : "Unidad de apoyo sin pacientes. ";
       if (servicios.some(item => item.alternativa.ambulancia_id === ambulanciaId)) {{
         resultadoDespacho.textContent = "Esta unidad ya fue asignada a esta emergencia.";
         return;
@@ -1485,13 +1517,15 @@ def _plantilla_html(datos_json: str) -> str:
           `${{ocupada.alternativa.emergencia_id}}.`;
         return;
       }}
+      const ahora = Date.now();
       const tiempos = tiempoHastaDisponible(alternativa);
       const liberacionEn = tiempos.minutos === null
         ? null
-        : Date.now() + tiempos.minutos * 60000;
-      despachos.set(ambulanciaId, {{ alternativa, tiempos, liberacionEn, pacientes }});
+        : ahora + tiempos.minutos * 60000;
+      despachos.set(ambulanciaId, {{ alternativa, tiempos, inicioEn: ahora, liberacionEn, pacientes }});
       resultadoDespacho.textContent =
         `${{emergenciaId}} asignada a ${{nombreDeAmbulancia(ambulanciaId)}}. ` +
+        detallePacientes +
         `Disponible en ${{minutosTexto(tiempos.minutos)}} ` +
         "(se libera automáticamente). Ya podés elegir otra urgencia.";
       prepararSiguienteDespacho();
@@ -1556,6 +1590,7 @@ def _plantilla_html(datos_json: str) -> str:
     const resultadoUrgencia = document.getElementById("resultado-urgencia");
     const resultadosDireccion = document.getElementById("resultados-direccion");
     const listaUrgencias = document.getElementById("lista-urgencias");
+    const listaAtendidas = document.getElementById("lista-atendidas");
     let eligiendoUbicacion = false;
     let marcadorUbicacion = null;
     let ubicacionUrgencia = null;
@@ -1988,35 +2023,50 @@ def _plantilla_html(datos_json: str) -> str:
       return "sin-asignar";
     }}
 
+    function urgenciaFinalizada(urgencia) {{
+      const activa = [...despachos.values()].some(
+        (item) => item.alternativa.emergencia_id === urgencia.id
+      );
+      const atendida = [...atendidas.values()].some(
+        (item) => item.alternativa.emergencia_id === urgencia.id
+      );
+      return !activa && atendida && coberturaCompleta(urgencia.id);
+    }}
+
     function renderUrgencias() {{
       const ordenEstado = {{ "en-uso": 0, "sin-asignar": 1, "atendida": 2 }};
-      const urgencias = [...datos.emergencias].sort((a, b) => {{
-        const diferencia = ordenEstado[estadoUrgencia(a.id)] -
-          ordenEstado[estadoUrgencia(b.id)];
-        if (diferencia) return diferencia;
-        if (Boolean(b.es_agregada) !== Boolean(a.es_agregada)) {{
-          return b.es_agregada ? 1 : -1;
-        }}
-        return a.id.localeCompare(b.id, "es", {{ numeric: true }});
-      }});
+      const urgencias = datos.emergencias
+        .filter((urgencia) => !urgenciaFinalizada(urgencia))
+        .sort((a, b) => {{
+          const diferencia = ordenEstado[estadoUrgencia(a.id)] -
+            ordenEstado[estadoUrgencia(b.id)];
+          if (diferencia) return diferencia;
+          if (Boolean(b.es_agregada) !== Boolean(a.es_agregada)) {{
+            return b.es_agregada ? 1 : -1;
+          }}
+          return a.id.localeCompare(b.id, "es", {{ numeric: true }});
+        }});
       listaUrgencias.innerHTML = urgencias.map((urgencia) => {{
         const activos = [...despachos.values()].filter(item => item.alternativa.emergencia_id === urgencia.id);
         const finalizados = [...atendidas.values()].filter(item => item.alternativa.emergencia_id === urgencia.id);
         const despacho = activos[0];
         const atencion = finalizados[0];
+        const completa = coberturaCompleta(urgencia.id);
         let estado = "Sin asignar";
         let claseEstado = "urgencia-estado";
         if (despacho) {{
-          estado = `En uso: ${{activos.map(item => escapar(nombreDeAmbulancia(item.alternativa.ambulancia_id))).join(", ")}}`;
+          estado = activos.map((item) =>
+            `${{faseDespacho(item).texto}}: ${{escapar(nombreDeAmbulancia(item.alternativa.ambulancia_id))}}`
+          ).join(" · ");
           claseEstado += " en-uso";
         }} else if (atencion) {{
-          estado = coberturaCompleta(urgencia.id) ? `Atendida por ${{finalizados.map(item => escapar(nombreDeAmbulancia(item.alternativa.ambulancia_id))).join(", ")}}` : "Cobertura parcial: faltan recursos o pacientes por trasladar";
-          claseEstado += " atendida";
+          estado = completa ? `Atendida por ${{finalizados.map(item => escapar(nombreDeAmbulancia(item.alternativa.ambulancia_id))).join(", ")}}` : "Cobertura parcial: faltan recursos o pacientes por trasladar";
+          claseEstado += completa ? " atendida" : "";
         }}
         const hora = atencion ? formatearHora(atencion.hora) : "";
         const servicios = serviciosEmergencia(urgencia.id);
         estado += ` · ${{servicios.length}}/${{urgencia.ambulancias_requeridas || 1}} unidades mínimas · ${{servicios.reduce((s, item) => s + item.pacientes, 0)}}/${{urgencia.cantidad_pacientes}} pacientes`;
-        if (despacho && !coberturaCompleta(urgencia.id)) estado += " · Cobertura parcial";
+        if (despacho && !completa) estado += " · Cobertura parcial";
         const referencia = urgencia.es_agregada
           ? `<span class="urgencia-badge">agregada</span><span>${{escapar(urgencia.direccion || "Ubicación elegida en el mapa")}}</span>`
           : "";
@@ -2026,7 +2076,7 @@ def _plantilla_html(datos_json: str) -> str:
         const botonQuitar = urgencia.es_agregada
           ? `<button type="button" class="boton-secundario" data-quitar-urgencia="${{escapar(urgencia.id)}}"${{atributoQuitar}}>Quitar</button>`
           : "";
-        return `<li class="urgencia-item${{atencion ? " atendida" : ""}}">
+        return `<li class="urgencia-item">
           <span class="urgencia-datos">
             <strong>${{escapar(urgencia.id)}}</strong>
             <span class="urgencia-grado gravedad-${{urgencia.gravedad}}">Grado ${{urgencia.gravedad}} (${{descripcionGravedad[urgencia.gravedad]}})</span>
@@ -2039,6 +2089,43 @@ def _plantilla_html(datos_json: str) -> str:
           </span>
         </li>`;
       }}).join("");
+
+      const finalizadas = datos.emergencias
+        .filter(urgenciaFinalizada)
+        .sort((a, b) => {{
+          const horaA = Math.max(...[...atendidas.values()]
+            .filter((item) => item.alternativa.emergencia_id === a.id)
+            .map((item) => item.hora));
+          const horaB = Math.max(...[...atendidas.values()]
+            .filter((item) => item.alternativa.emergencia_id === b.id)
+            .map((item) => item.hora));
+          return horaB - horaA || a.id.localeCompare(b.id, "es", {{ numeric: true }});
+        }});
+      finalizadas.forEach((urgencia) => {{
+        if (marcadoresEmergencia[urgencia.id]) {{
+          mapa.removeLayer(marcadoresEmergencia[urgencia.id]);
+          delete marcadoresEmergencia[urgencia.id];
+        }}
+      }});
+      listaAtendidas.innerHTML = finalizadas.length
+        ? finalizadas.map((urgencia) => {{
+            const servicios = [...atendidas.values()].filter(
+              (item) => item.alternativa.emergencia_id === urgencia.id
+            );
+            const hora = formatearHora(Math.max(...servicios.map((item) => item.hora)));
+            return `<li class="urgencia-item atendida">
+              <span class="urgencia-datos">
+                <strong>${{escapar(urgencia.id)}}</strong>
+                <span class="urgencia-grado gravedad-${{urgencia.gravedad}}">Grado ${{urgencia.gravedad}} (${{descripcionGravedad[urgencia.gravedad]}})</span>
+                <span>${{urgencia.cantidad_pacientes}} ${{urgencia.cantidad_pacientes === 1 ? "paciente" : "pacientes"}} · ${{servicios.length}} ${{servicios.length === 1 ? "unidad" : "unidades"}}</span>
+              </span>
+              <span class="urgencia-datos">
+                <span class="urgencia-estado atendida">Atendida${{hora ? ` a las ${{hora}}` : ""}}</span>
+                <span>${{servicios.map((item) => escapar(nombreDeAmbulancia(item.alternativa.ambulancia_id))).join(", ")}}</span>
+              </span>
+            </li>`;
+          }}).join("")
+        : '<li class="dashboard-vacio">Ninguna urgencia atendida todavía.</li>';
     }}
 
     function quitarUrgencia(id) {{

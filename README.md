@@ -25,6 +25,9 @@ despacho de emergencias. Los datos de ambulancias, emergencias y
 establecimientos son simulados, y los resultados dependen de los datos y
 supuestos documentados en este README.
 
+Para una explicacion paso a paso, incluida la seleccion de caminos, ver
+`docs/COMO-FUNCIONA.md`.
+
 ## Arquitectura
 
 ### Organizacion de los modulos
@@ -369,24 +372,27 @@ El mapa conserva:
 El cuadro de liberacion se alimenta con el boton **Poner ambulancia en uso** del
 visor manual. Para cada atencion registrada muestra la ambulancia, la emergencia,
 el establecimiento, el recorrido y el tiempo estimado hasta quedar disponible.
-Ese tiempo se descuenta en vivo y, al llegar a cero, la ambulancia se libera
-automaticamente y vuelve a figurar como disponible. El boton **Liberar** permite
-adelantar la liberacion de forma manual.
+Ese tiempo se descuenta en vivo y el estado muestra las fases calculadas con la
+trayectoria: **En camino al accidente**, **En escena**, **Camino al hospital** y
+**Regresando a la base**. Al llegar a cero, la ambulancia se libera
+automaticamente y vuelve a figurar como disponible. El boton
+**Finalizar esta unidad** permite adelantar la liberacion de forma manual.
 
-Al despachar, la urgencia sale del selector, la ambulancia usada deja de estar
-disponible y el visor queda listo para elegir otra urgencia. Mientras la
-ambulancia esta en uso, la urgencia agregada no se puede quitar: el boton
-**Quitar** queda deshabilitado. Cuando la ambulancia se libera (automatica o
-manualmente), la urgencia pasa a estado **Atendida** con la ambulancia y la
-hora, y se ubica al final de la lista.
+Al despachar, la ambulancia usada deja de estar disponible y el visor queda listo
+para otra urgencia. La urgencia sigue en el selector mientras falte cobertura de
+unidades o de pacientes, para permitir refuerzos. Mientras tenga una unidad en
+uso, la urgencia agregada no se puede quitar: el boton **Quitar** queda
+deshabilitado. Cuando se completa la cobertura y finalizan todas las unidades,
+la urgencia pasa al cuadro **Urgencias atendidas**, con horas y unidades, y su
+marcador desaparece del mapa.
 
-El cuadro **Urgencias y grados** permite crear una urgencia nueva indicando un
-ID, un grado de 1 a 3 y una ubicacion propia, ya sea escribiendo la latitud y la
-longitud o haciendo clic en **Elegir en el mapa**. El mapa conecta esa ubicacion
-con el nodo vial mas cercano y calcula en el navegador las rutas hacia cada
-ambulancia y establecimiento, junto con las alternativas y su factibilidad. La
-urgencia se agrega al mapa y al selector manual, y se puede quitar mientras no
-forme parte del flujo automatico.
+El cuadro **Urgencias y grados** permite crear una urgencia nueva indicando la
+cantidad de pacientes, el minimo de ambulancias, un ID, un grado de 1 a 3 y una
+ubicacion propia: se busca por **calle y numero** o se elige con **Elegir en el
+mapa**. El mapa conecta esa ubicacion con el nodo vial mas cercano y calcula en el
+navegador las rutas hacia cada ambulancia y establecimiento, junto con las
+alternativas y su factibilidad. La urgencia se agrega al mapa y al selector
+manual, y se puede quitar mientras no tenga unidades en uso.
 
 ```text
 tiempo_min =
